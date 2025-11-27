@@ -20,7 +20,6 @@
                 
                 <div class="flex-grow overflow-y-auto p-2 md:p-4 space-y-3">
                     <div id="pat-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-                    
                     <footer class="text-center py-6 text-xs text-gray-400 mt-8 col-span-full">
                         Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>
                     </footer>
@@ -186,7 +185,6 @@
                     const isMe = m.author === 'Dentista';
                     const isInternal = m.author === 'Nota Interna';
                     
-                    // Estilo diferente para Nota Interna
                     let bgClass = isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border text-gray-800 rounded-bl-none';
                     let label = m.author;
 
@@ -248,7 +246,7 @@
         setTimeout(() => document.getElementById('c-msg').focus(), 100);
     };
 
-    // --- NOVA IA (SALVA COMO NOTA INTERNA) ---
+    // --- NOVA IA INTEGRADA (LÊ O CÉREBRO E ATIVA MODO 2) ---
     window.callAI = async (pid) => {
         const p = App.data.patients.find(x => x.id === pid);
         const btn = document.querySelector('button[title="Gerar Parecer IA"]');
@@ -258,18 +256,40 @@
         btn.disabled = true;
 
         try {
+            // 1. Busca Histórico
             const snaps = await App.db.ref(`artifacts/${window.AppConfig.APP_ID}/patients/${pid}/journal`).limitToLast(10).once('value');
             let hist = "";
             if(snaps.exists()) snaps.forEach(s => hist += `[${s.val().author}]: ${s.val().text}\n`);
 
+            // 2. Busca o Cérebro (Diretrizes do Dentista)
+            const brainSnap = await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives')).once('value');
+            const customBrain = brainSnap.exists() ? brainSnap.val().promptDirectives : null;
+
+            // 3. Monta o Prompt com Instrução de MODO 2
+            let systemPrompt = "";
+            if (customBrain) {
+                systemPrompt = `
+                    ${customBrain}
+                    
+                    --- INSTRUÇÃO DO SISTEMA ---
+                    ATENÇÃO: O interlocutor agora é o DENTISTA (Profissional).
+                    ATIVE O "MODO 2: ASSISTENTE TÉCNICA".
+                    Seja técnica, direta e profissional. Use termos odontológicos.
+                `;
+            } else {
+                systemPrompt = "ATUE COMO: Dentista Especialista Sênior. Gere um parecer técnico direto.";
+            }
+
             const response = await window.callGeminiAPI(
-                `ATUE COMO: Dentista Especialista Sênior. 
-                 PACIENTE: ${p.name}, TIPO: ${p.treatmentType}, META: ${p.treatmentGoal}.
-                 HISTÓRICO RECENTE: ${hist}
-                 TAREFA: Gere um Parecer Técnico curto e direto. Não use saudações.`, 
-                "Gere evolução sugerida."
+                `${systemPrompt}
+                 
+                 PACIENTE: ${p.name}, ${p.treatmentType}.
+                 HISTÓRICO RECENTE:
+                 ${hist}`, 
+                "Gere a evolução técnica sugerida."
             );
 
+            // 4. Modal de Resposta
             const overlay = document.createElement('div');
             overlay.className = "fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in";
             overlay.id = "ai-overlay";
@@ -296,7 +316,6 @@
 
             window.confirmAI = (id) => {
                 const finalTxt = document.getElementById('ai-result-text').value;
-                // SALVA COMO "Nota Interna" -> Paciente não vê (bloqueado no portal.js)
                 App.db.ref(`artifacts/${window.AppConfig.APP_ID}/patients/${id}/journal`).push({
                     text: finalTxt, author: 'Nota Interna', timestamp: new Date().toISOString()
                 });
