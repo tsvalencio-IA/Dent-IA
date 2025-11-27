@@ -18,10 +18,10 @@
     const CLOUDINARY_UPLOAD_PRESET = "dental";
 
     // 3. CONFIGURAÇÃO GOOGLE GEMINI API
-    // ATENÇÃO: Use este modelo exato. O "2.5" não existe, o que força o sistema a usar uma versão antiga e instável.
-    const GEMINI_MODEL = "gemini-1.5-flash"; 
+    // Usando 'gemini-pro' para garantir compatibilidade total e evitar erro 404.
+    const GEMINI_MODEL = "gemini-pro"; 
     
-    // SUA CHAVE NOVA (A que você criou e disse que funcionou):
+    // SUA CHAVE API
     const API_KEY = "AIzaSyAFAfXgdbMeXdGf42zWeYbNbBsi0LrvpvU"; 
 
     // 4. ITENS DE NAVEGAÇÃO
