@@ -1,22 +1,17 @@
 // =====================================================================
-// 🧠 MÓDULO IA: js/ai.js (CORRIGIDO PARA GEMINI 1.5)
+// 🧠 MÓDULO IA: js/ai.js (COM SISTEMA ANTI-FALHA ROBUSTO)
 // =====================================================================
 (function() {
     const config = window.AppConfig || {};
-    // O modelo padrão agora é o 1.5 Flash (Rápido e Inteligente)
-    const PRIMARY_MODEL = config.GEMINI_MODEL || "gemini-1.5-flash";
     const API_KEY = config.API_KEY;
 
-    async function callGeminiAPI(systemPrompt, userMessage) {
-        if (!API_KEY || API_KEY.includes("SUA_CHAVE")) {
-            console.error("ERRO GEMINI: API Key inválida.");
-            return "Erro de Configuração: Chave API não encontrada.";
-        }
+    // Lista de modelos para tentar (Se o primeiro falhar, ele tenta o próximo)
+    const MODELS_TO_TRY = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
 
-        // URL Oficial da API v1beta
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${PRIMARY_MODEL}:generateContent?key=${API_KEY}`;
+    async function tryGenerate(modelName, systemPrompt, userMessage) {
+        // Monta a URL da API
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         
-        // Estrutura do Prompt Unificado
         const finalPrompt = `
 CONTEXTO DO SISTEMA:
 ${systemPrompt}
@@ -29,30 +24,47 @@ ${userMessage}
             contents: [{ role: "user", parts: [{ text: finalPrompt }] }]
         };
 
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-            if (!response.ok) {
-                const errData = await response.json();
-                console.error("Erro detalhado da API:", errData);
-                throw new Error(errData.error?.message || "Erro na comunicação com a IA");
+        if (!response.ok) {
+            // Se der erro (404, 403, 500), lança exceção para o catch pegar
+            const err = await response.json();
+            throw new Error(err.error?.message || response.statusText);
+        }
+
+        const data = await response.json();
+        
+        if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+            return data.candidates[0].content.parts[0].text;
+        } else {
+            throw new Error("Resposta vazia da IA.");
+        }
+    }
+
+    async function callGeminiAPI(systemPrompt, userMessage) {
+        if (!API_KEY || API_KEY.length < 10) {
+            return "Erro: Chave API inválida ou não configurada.";
+        }
+
+        // Loop de Tentativas (Fallback)
+        for (let i = 0; i < MODELS_TO_TRY.length; i++) {
+            const model = MODELS_TO_TRY[i];
+            try {
+                const result = await tryGenerate(model, systemPrompt, userMessage);
+                return result; // SUCESSO: Retorna a resposta e para o loop
+            } catch (error) {
+                console.warn(`⚠️ Tentativa com ${model} falhou.`, error.message);
+                
+                // Se foi a última tentativa e falhou todas
+                if (i === MODELS_TO_TRY.length - 1) {
+                    return `Erro na IA: Não foi possível conectar. Detalhe: ${error.message}`;
+                }
+                // Se não, o loop continua e tenta o próximo modelo da lista
             }
-
-            const data = await response.json();
-            
-            if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-                return data.candidates[0].content.parts[0].text;
-            } else {
-                return "A IA não conseguiu gerar uma resposta válida (Retorno vazio).";
-            }
-
-        } catch (error) {
-            console.error("Erro IA:", error);
-            return `Erro na IA: ${error.message}. Verifique se a chave API está ativa.`;
         }
     }
 
