@@ -14,13 +14,11 @@
         <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-center border-t-4 border-indigo-600">
             <h1 class="text-3xl font-bold text-indigo-800 mb-2">🦷 Dentista IA</h1>
             <p class="text-sm text-gray-600 mb-6" id="auth-message">Acesso Administrativo</p>
-            
             <form id="auth-form" class="space-y-4">
                 <input type="email" id="auth-email" placeholder="Email" class="w-full p-3 border rounded-lg" required>
                 <input type="password" id="auth-password" placeholder="Senha" class="w-full p-3 border rounded-lg" required>
                 <button type="submit" id="auth-submit-btn" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700">Entrar</button>
             </form>
-
             <div class="mt-4 text-sm">
                 <button id="toggle-auth-mode" class="text-indigo-600 font-medium">Criar conta</button>
             </div>
@@ -35,7 +33,6 @@
                 <i class='bx bx-log-out text-xl mr-3'></i><span class="font-semibold">Sair</span>
             </button>
         </aside>
-
         <main id="main-content" class="flex-grow p-4 lg:p-10"></main>
     </div>
 
@@ -54,6 +51,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script> 
     
     <script src="js/config.js"></script>
+    
     <script src="js/ai.js"></script>
     <script src="js/cloudinary.js"></script>
     
