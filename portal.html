@@ -21,10 +21,16 @@
             <form id="p-login-form" class="space-y-4">
                 <input type="email" id="p-email" placeholder="Seu E-mail" class="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition" required>
                 <input type="password" id="p-pass" placeholder="Sua Senha" class="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition" required>
-                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition transform active:scale-95">
+                
+                <button type="submit" id="p-submit-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition transform active:scale-95">
                     Acessar Meu Portal
                 </button>
             </form>
+
+            <button id="p-toggle-mode" class="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium underline">
+                Não tem senha? Criar conta
+            </button>
+
             <p id="p-msg" class="text-red-500 text-xs mt-3 h-4"></p>
         </div>
     </div>
@@ -67,10 +73,6 @@
                     </div>
             </section>
 
-            <footer class="text-center py-4 text-xs text-gray-400">
-                Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong>
-            </footer>
-
         </main>
 
         <div class="absolute bottom-0 w-full bg-white p-3 border-t border-gray-100 pb-6 z-20">
@@ -98,8 +100,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script src="js/config.js"></script>
-    <script src="js/ai.js"></script>
     <script src="js/cloudinary.js"></script>
+    <script src="js/ai.js"></script>
+    
     <script src="js/portal.js"></script>
 
 </body>
