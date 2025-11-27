@@ -1,5 +1,5 @@
 // ==================================================================
-// MÓDULO PORTAL DO PACIENTE (VERSÃO FINAL COM RODAPÉ)
+// MÓDULO PORTAL DO PACIENTE (VERSÃO FINAL COM RODAPÉ & FILTRO IA)
 // ==================================================================
 (function() {
     var config = window.AppConfig;
@@ -82,6 +82,15 @@
         document.getElementById('p-treatment').textContent = myProfile.treatmentType;
         document.getElementById('p-status').textContent = 'Ativo';
         
+        // INJEÇÃO DO RODAPÉ (Solicitado)
+        var footer = document.querySelector('#patient-app footer');
+        if(!footer) {
+             footer = document.createElement('footer');
+             footer.className = 'text-center py-4 text-xs text-gray-400 bg-white mt-auto w-full border-t border-gray-100';
+             footer.innerHTML = 'Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>';
+             document.querySelector('#patient-app main').appendChild(footer);
+        }
+
         loadTimeline();
         loadFinance();
     }
@@ -95,6 +104,10 @@
             if (snap.exists()) {
                 snap.forEach(function(c) {
                     var msg = c.val();
+                    
+                    // SEGURANÇA: NÃO MOSTRAR NOTA INTERNA PARA O PACIENTE
+                    if (msg.author === 'Nota Interna') return;
+
                     var isMe = msg.author === 'Paciente';
                     var align = isMe ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-gray-100 text-gray-800 border';
                     
@@ -156,7 +169,6 @@
         document.getElementById('img-preview-area').classList.add('hidden');
 
         if (window.callGeminiAPI && text) {
-            // PROMPT MELHORADO (SECRETÁRIA)
             var context = `
                 ATUE COMO: Recepcionista Virtual da Clínica.
                 PACIENTE: ${myProfile.name}.
