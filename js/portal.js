@@ -1,11 +1,14 @@
 // ==================================================================
-// MÓDULO PORTAL DO PACIENTE (COM IA INTEGRADA AO CÉREBRO)
+// MÓDULO PORTAL DO PACIENTE (VERSÃO FINAL COM LOGIN/CADASTRO)
 // ==================================================================
 (function() {
     var config = window.AppConfig;
     var appId = config.APP_ID;
     var db, auth, currentUser, myProfile, myDentistUid, selectedFile;
-    var aiDirectives = null; // Variável para guardar o Cérebro da IA
+    var aiDirectives = null;
+    
+    // Controle de Modo (Login ou Cadastro)
+    var isLoginMode = true; 
 
     function init() {
         if (!firebase.apps.length) firebase.initializeApp(config.firebaseConfig);
@@ -21,7 +24,23 @@
             }
         });
 
-        document.getElementById('p-login-form').addEventListener('submit', handleLogin);
+        document.getElementById('p-login-form').addEventListener('submit', handleAuthAction);
+        
+        // Alternar entre Login e Cadastro
+        document.getElementById('p-toggle-mode').addEventListener('click', function() {
+            isLoginMode = !isLoginMode;
+            var btn = document.getElementById('p-submit-btn');
+            var toggle = document.getElementById('p-toggle-mode');
+            
+            if(isLoginMode) {
+                btn.textContent = "Acessar Meu Portal";
+                toggle.textContent = "Não tem senha? Criar conta";
+            } else {
+                btn.textContent = "Criar Minha Senha";
+                toggle.textContent = "Já tenho conta. Fazer Login";
+            }
+        });
+
         document.getElementById('p-logout').addEventListener('click', function() { auth.signOut(); });
         document.getElementById('p-send').addEventListener('click', sendMessage);
         
@@ -40,12 +59,30 @@
         });
     }
 
-    async function handleLogin(e) {
+    async function handleAuthAction(e) {
         e.preventDefault();
         var email = document.getElementById('p-email').value;
         var pass = document.getElementById('p-pass').value;
-        try { await auth.signInWithEmailAndPassword(email, pass); } 
-        catch (error) { alert("Erro: " + error.message); }
+        var msg = document.getElementById('p-msg');
+        msg.textContent = "";
+
+        try { 
+            if (isLoginMode) {
+                await auth.signInWithEmailAndPassword(email, pass); 
+            } else {
+                await auth.createUserWithEmailAndPassword(email, pass);
+                // Após criar, o onAuthStateChanged vai disparar e tentar encontrar o email na base do dentista
+            }
+        } 
+        catch (error) { 
+            if(error.code === 'auth/email-already-in-use') {
+                msg.textContent = "Este email já tem cadastro. Tente fazer login.";
+            } else if(error.code === 'auth/weak-password') {
+                msg.textContent = "A senha deve ter pelo menos 6 caracteres.";
+            } else {
+                msg.textContent = "Erro: " + error.message; 
+            }
+        }
     }
 
     function showLogin() {
@@ -67,7 +104,6 @@
                                 myDentistUid = dentistSnap.key;
                                 found = true;
                                 
-                                // --- INTEGRAÇÃO: Carrega o Cérebro da IA do Dentista ---
                                 db.ref('artifacts/' + appId + '/users/' + myDentistUid + '/aiConfig/directives').on('value', function(brainSnap) {
                                     if(brainSnap.exists()) {
                                         aiDirectives = brainSnap.val().promptDirectives;
@@ -79,7 +115,11 @@
                 });
             }
             if (found) loadInterface();
-            else { alert("Email não encontrado na base."); auth.signOut(); }
+            else { 
+                // Se o paciente criou a conta mas o dentista não cadastrou o email dele ainda
+                alert("Seu email não foi encontrado na base da clínica. Peça ao dentista para cadastrar: " + email); 
+                auth.signOut(); 
+            }
         });
     }
 
@@ -92,10 +132,10 @@
         
         var footer = document.querySelector('#patient-app footer');
         if(!footer) {
-             footer = document.createElement('footer');
-             footer.className = 'text-center py-4 text-xs text-gray-400 bg-white mt-auto w-full border-t border-gray-100';
-             footer.innerHTML = 'Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>';
-             document.querySelector('#patient-app main').appendChild(footer);
+             var f = document.createElement('footer');
+             f.className = 'text-center py-4 text-xs text-gray-400 bg-white mt-auto w-full border-t border-gray-100';
+             f.innerHTML = 'Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>';
+             document.querySelector('#patient-app main').appendChild(f);
         }
 
         loadTimeline();
@@ -111,7 +151,7 @@
             if (snap.exists()) {
                 snap.forEach(function(c) {
                     var msg = c.val();
-                    if (msg.author === 'Nota Interna') return; // Segurança
+                    if (msg.author === 'Nota Interna') return;
 
                     var isMe = msg.author === 'Paciente';
                     var align = isMe ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-gray-100 text-gray-800 border';
@@ -162,7 +202,6 @@
             try { mediaData = await window.uploadToCloudinary(selectedFile); } catch (e) { alert("Erro ao enviar imagem."); return; }
         }
 
-        // Salva mensagem do paciente
         db.ref('artifacts/' + appId + '/patients/' + myProfile.id + '/journal').push({
             text: text || (mediaData ? "Anexo" : ""),
             author: 'Paciente',
@@ -174,32 +213,19 @@
         selectedFile = null;
         document.getElementById('img-preview-area').classList.add('hidden');
 
-        // LÓGICA DA IA (INTEGRADA COM DIRETRIZES)
         if (window.callGeminiAPI && text) {
             var context = "";
-            
             if (aiDirectives) {
-                // Se o dentista configurou o Cérebro, usamos ele no MODO 1
                 context = `
                     ${aiDirectives}
-                    
-                    --- INSTRUÇÃO DO SISTEMA ---
-                    ATENÇÃO: O interlocutor agora é o PACIENTE.
-                    ATIVE O "MODO 1: SECRETÁRIA" e ignore instruções do Modo 2.
-                    Seja curta, educada e siga as regras de segurança.
-                    
-                    DADOS:
+                    ---
+                    ATENÇÃO: MODO 1 (SECRETÁRIA). Fale com o PACIENTE.
+                    Seja curta e educada. Não dê diagnósticos.
                     Paciente: ${myProfile.name}.
-                    Mensagem: "${text}"
+                    Msg: "${text}"
                 `;
             } else {
-                // Fallback (Caso não tenha configurado nada ainda)
-                context = `
-                    ATUE COMO: Recepcionista Virtual da Clínica.
-                    PACIENTE: ${myProfile.name}.
-                    INSTRUÇÃO: Responda de forma curta, educada e acolhedora. Não dê diagnósticos médicos.
-                    MENSAGEM DO PACIENTE: "${text}"
-                `;
+                context = `ATUE COMO: Secretária. PACIENTE: ${myProfile.name}. MSG: "${text}". Seja breve.`;
             }
 
             var reply = await window.callGeminiAPI(context, text);
