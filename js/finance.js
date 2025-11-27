@@ -1,8 +1,12 @@
 // ==================================================================
-// MÓDULO FINANCEIRO COMPLETO (ERP: PARCELAS + ESTOQUE AUTOMÁTICO)
+// MÓDULO FINANCEIRO COMPLETO (CORRIGIDO: ESCOPO GLOBAL E LISTAS)
 // ==================================================================
 (function() {
     const App = window.DentistaApp;
+
+    // --- VARIÁVEIS GLOBAIS DE APOIO (Para evitar ReferenceError) ---
+    window.tempRecItems = [];
+    window.tempExpItems = [];
 
     // --- VIEW PRINCIPAL ---
     window.initFinanceView = function() {
@@ -37,14 +41,83 @@
         if(tab === 'stk') renderStock();
     };
 
+    // --- FUNÇÕES AUXILIARES GLOBAIS (CORREÇÃO CRÍTICA) ---
+    
+    // Alterna visualização das parcelas
+    window.toggleInst = (val, id) => {
+        const el = document.getElementById(id);
+        if(el) {
+            if(['Cartão', 'Cartão Crédito', 'Boleto'].includes(val)) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+    };
+
+    // Renderiza lista temporária (Genérico para Receita e Despesa)
+    window.renderTempList = (type) => {
+        const list = type === 'rec' ? window.tempRecItems : window.tempExpItems;
+        const containerId = type === 'rec' ? 'r-stock-list' : 'e-stock-list';
+        const el = document.getElementById(containerId);
+        
+        if(!el) return;
+
+        if(list.length === 0) {
+            el.innerHTML = '<p class="text-gray-400 italic text-center mt-4">Nenhum item adicionado.</p>';
+            return;
+        }
+
+        el.innerHTML = list.map((i, idx) => `
+            <div class="flex justify-between items-center bg-gray-100 p-2 rounded mb-1 text-xs">
+                <span class="font-bold text-gray-700">${i.qty} ${i.unit || ''} - ${i.name}</span>
+                <button type="button" onclick="removeItem('${type}', ${idx})" class="text-red-500 font-bold px-2 hover:bg-red-100 rounded">&times;</button>
+            </div>`).join('');
+    };
+
+    // Adiciona Item (Receita)
+    window.addRecItem = () => {
+        const sel = document.getElementById('r-stock-sel');
+        const qty = parseFloat(document.getElementById('r-stock-qty').value);
+        if(!qty || qty <= 0) return;
+        
+        const opt = sel.options[sel.selectedIndex];
+        window.tempRecItems.push({ id: sel.value, name: opt.dataset.name, qty: qty, unit: opt.dataset.unit });
+        window.renderTempList('rec');
+        document.getElementById('r-stock-qty').value = '';
+    };
+
+    // Adiciona Item (Despesa)
+    window.addExpItem = () => {
+        const name = document.getElementById('e-item-name').value;
+        const qty = parseFloat(document.getElementById('e-item-qty').value);
+        const unit = document.getElementById('e-item-unit').value || 'un';
+        const cat = document.getElementById('e-item-cat').value;
+
+        if(!name || !qty) return;
+        window.tempExpItems.push({ name, qty, unit, category: cat });
+        window.renderTempList('exp');
+        
+        document.getElementById('e-item-name').value = '';
+        document.getElementById('e-item-qty').value = '';
+        document.getElementById('e-item-name').focus();
+    };
+
+    // Remove Item
+    window.removeItem = (type, idx) => {
+        if(type === 'rec') window.tempRecItems.splice(idx, 1);
+        else window.tempExpItems.splice(idx, 1);
+        window.renderTempList(type);
+    };
+
     // ==================================================================
-    // 1. RECEITAS (COM PARCELAMENTO E BAIXA DE ESTOQUE)
+    // 1. RECEITAS
     // ==================================================================
     function renderReceivables() {
         const div = document.getElementById('fin-content');
         div.innerHTML = `
             <div class="flex justify-between items-center mb-4">
-                <p class="text-xs text-gray-500">Lançamentos de procedimentos e pagamentos.</p>
+                <p class="text-xs text-gray-500">Lançamentos de procedimentos.</p>
                 <button onclick="openRecModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-indigo-700 flex items-center"><i class='bx bx-plus mr-1'></i> Novo Serviço</button>
             </div>
             <div id="rec-list" class="space-y-3"></div>`;
@@ -85,6 +158,7 @@
     }
 
     window.openRecModal = function() {
+        window.tempRecItems = []; // Reset da lista
         const patOpts = App.data.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
         const stockOpts = App.data.stock.map(s => `<option value="${s.id}" data-name="${s.name}" data-unit="${s.unit}">${s.name} (${s.quantity} ${s.unit})</option>`).join('');
 
@@ -99,7 +173,7 @@
                         <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="r-date" type="date" class="w-full border p-2 rounded"></div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 bg-indigo-50 p-2 rounded border border-indigo-100">
-                        <div><label class="font-bold text-indigo-900">Pagamento</label><select id="r-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'rec-inst-area')"><option value="Pix">Pix</option><option value="Dinheiro">Dinheiro</option><option value="Cartão">Cartão Crédito</option><option value="Boleto">Boleto</option></select></div>
+                        <div><label class="font-bold text-indigo-900">Pagamento</label><select id="r-method" class="w-full border p-2 rounded" onchange="window.toggleInst(this.value, 'rec-inst-area')"><option value="Pix">Pix</option><option value="Dinheiro">Dinheiro</option><option value="Cartão">Cartão Crédito</option><option value="Boleto">Boleto</option></select></div>
                         <div id="rec-inst-area" class="hidden">
                             <label class="font-bold text-indigo-900">Parcelas</label>
                             <select id="r-parcels" class="w-full border p-2 rounded">
@@ -116,43 +190,17 @@
                     <div class="flex gap-2 mb-2">
                         <select id="r-stock-sel" class="flex-grow border p-1 rounded text-xs">${stockOpts}</select>
                         <input id="r-stock-qty" type="number" placeholder="Qtd" class="w-16 border p-1 rounded text-xs">
-                        <button type="button" onclick="addStockItemToRec()" class="bg-blue-600 text-white px-2 rounded text-xs font-bold">+</button>
+                        <button type="button" onclick="window.addRecItem()" class="bg-blue-600 text-white px-2 rounded text-xs font-bold">+</button>
                     </div>
                     <div id="r-stock-list" class="flex-grow overflow-y-auto bg-white border rounded p-2 text-xs space-y-1 h-32">
                         <p class="text-gray-400 italic text-center mt-4">Nenhum item selecionado.</p>
                     </div>
-                    <p class="text-[10px] text-gray-500 mt-2">* Estes itens serão descontados do estoque.</p>
+                    <p class="text-[10px] text-gray-500 mt-2">* Itens listados aqui serão descontados do estoque.</p>
                 </div>
             </div>
             <button onclick="saveRec()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-indigo-700">Salvar Serviço e Baixar Estoque</button>
         `;
         App.utils.openModal("Novo Atendimento", html, "max-w-4xl");
-
-        window.tempItemsUsed = [];
-        
-        window.toggleInst = (val, id) => {
-            const el = document.getElementById(id);
-            if(el) el.classList.toggle('hidden', !['Cartão', 'Boleto'].includes(val));
-        };
-
-        window.addStockItemToRec = () => {
-            const sel = document.getElementById('r-stock-sel');
-            const qty = parseFloat(document.getElementById('r-stock-qty').value);
-            if(!qty || qty <= 0) return;
-            const opt = sel.options[sel.selectedIndex];
-            window.tempItemsUsed.push({ id: sel.value, name: opt.dataset.name, qty: qty, unit: opt.dataset.unit });
-            renderTempItems('r-stock-list', window.tempItemsUsed);
-            document.getElementById('r-stock-qty').value = '';
-        };
-
-        window.renderTempItems = (containerId, list) => {
-            const el = document.getElementById(containerId);
-            el.innerHTML = list.map((i, idx) => `
-                <div class="flex justify-between items-center bg-gray-100 p-1 rounded">
-                    <span>${i.qty} ${i.unit} - ${i.name}</span>
-                    <button onclick="window.tempItemsUsed.splice(${idx},1); renderTempItems('${containerId}', window.tempItemsUsed)" class="text-red-500 font-bold px-1">&times;</button>
-                </div>`).join('') || '<p class="text-gray-400 italic text-center">Vazio.</p>';
-        };
 
         window.saveRec = async () => {
             const pid = document.getElementById('r-pat').value;
@@ -180,13 +228,13 @@
                     dueDate: dueDate.toISOString(),
                     paymentMethod: method,
                     status: 'Aberto',
-                    itemsUsed: (i === 0) ? window.tempItemsUsed : []
+                    itemsUsed: (i === 0) ? window.tempRecItems : []
                 };
                 await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/receivable')).push(data);
             }
 
-            if(window.tempItemsUsed.length > 0) {
-                for(let item of window.tempItemsUsed) {
+            if(window.tempRecItems.length > 0) {
+                for(let item of window.tempRecItems) {
                     const ref = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${item.id}`));
                     const snap = await ref.once('value');
                     if(snap.exists()) {
@@ -197,18 +245,18 @@
             }
 
             App.utils.closeModal();
-            alert("Sucesso! Financeiro gerado e estoque baixado.");
+            alert("Lançamento realizado com sucesso!");
         };
     };
 
     // ==================================================================
-    // 2. DESPESAS (COM PARCELAMENTO E ENTRADA DE NOTA NO ESTOQUE)
+    // 2. DESPESAS
     // ==================================================================
     function renderExpenses() {
         const div = document.getElementById('fin-content');
         div.innerHTML = `
             <div class="flex justify-between items-center mb-4">
-                <p class="text-xs text-gray-500">Contas a pagar (Luz, Água, Fornecedores).</p>
+                <p class="text-xs text-gray-500">Contas a pagar.</p>
                 <button onclick="openExpModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-red-700 flex items-center"><i class='bx bx-plus mr-1'></i> Nova Despesa</button>
             </div>
             <div id="exp-list" class="space-y-3"></div>`;
@@ -249,19 +297,20 @@
     }
 
     window.openExpModal = function() {
+        window.tempExpItems = []; // Reset da lista
         const html = `
             <div class="grid md:grid-cols-2 gap-6 h-full text-sm">
                 <div class="space-y-3">
                     <h4 class="font-bold text-red-800 border-b pb-1">1. Dados da Conta</h4>
-                    <div><label class="font-bold text-gray-600">Fornecedor</label><input id="e-sup" class="w-full border p-2 rounded" placeholder="Ex: CEMIG ou Dental Cremer"></div>
-                    <div><label class="font-bold text-gray-600">Descrição</label><input id="e-desc" class="w-full border p-2 rounded" placeholder="Ex: Conta de Luz ou Material Mensal"></div>
+                    <div><label class="font-bold text-gray-600">Fornecedor</label><input id="e-sup" class="w-full border p-2 rounded" placeholder="Ex: Dental Cremer"></div>
+                    <div><label class="font-bold text-gray-600">Descrição</label><input id="e-desc" class="w-full border p-2 rounded" placeholder="Ex: Compra de Material"></div>
                     <div class="grid grid-cols-2 gap-2">
                         <div><label class="font-bold text-gray-600">Valor Total (R$)</label><input id="e-val" type="number" step="0.01" class="w-full border p-2 rounded"></div>
                         <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="e-date" type="date" class="w-full border p-2 rounded"></div>
                     </div>
                     <div><label class="font-bold text-gray-600">Ref/NF</label><input id="e-nf" class="w-full border p-2 rounded"></div>
                     <div class="grid grid-cols-2 gap-2 bg-red-50 p-2 rounded border border-red-100">
-                        <div><label class="font-bold text-red-900">Pagamento</label><select id="e-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'exp-inst-area')"><option value="Boleto">Boleto</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select></div>
+                        <div><label class="font-bold text-red-900">Pagamento</label><select id="e-method" class="w-full border p-2 rounded" onchange="window.toggleInst(this.value, 'exp-inst-area')"><option value="Boleto">Boleto</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select></div>
                         <div id="exp-inst-area" class="hidden">
                             <label class="font-bold text-red-900">Parcelas</label>
                             <select id="e-parcels" class="w-full border p-2 rounded">
@@ -282,7 +331,7 @@
                     <div class="flex gap-2 mb-2">
                         <input id="e-item-qty" type="number" placeholder="Qtd" class="flex-grow border p-1 rounded text-xs">
                         <select id="e-item-cat" class="border p-1 rounded text-xs"><option>Consumo</option><option>Venda</option></select>
-                        <button type="button" onclick="addStockItemToExp()" class="bg-green-600 text-white px-3 rounded text-xs font-bold">Add</button>
+                        <button type="button" onclick="window.addExpItem()" class="bg-green-600 text-white px-3 rounded text-xs font-bold">Add</button>
                     </div>
                     <div id="e-stock-list" class="flex-grow overflow-y-auto bg-white border rounded p-2 text-xs space-y-1 h-24">
                         <p class="text-gray-400 italic text-center mt-4">Nenhum item adicionado.</p>
@@ -293,20 +342,6 @@
             <button onclick="saveExp()" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-red-700">Salvar Despesa e Atualizar Estoque</button>
         `;
         App.utils.openModal("Nova Despesa / Entrada", html, "max-w-4xl");
-
-        window.tempItemsPurchased = [];
-
-        window.addStockItemToExp = () => {
-            const name = document.getElementById('e-item-name').value;
-            const qty = parseFloat(document.getElementById('e-item-qty').value);
-            const unit = document.getElementById('e-item-unit').value || 'un';
-            const cat = document.getElementById('e-item-cat').value;
-            if(!name || !qty) return;
-            window.tempItemsPurchased.push({ name, qty, unit, category: cat });
-            renderTempItems('e-stock-list', window.tempItemsPurchased);
-            document.getElementById('e-item-name').value = '';
-            document.getElementById('e-item-qty').value = '';
-        };
 
         window.saveExp = async () => {
             const supplier = document.getElementById('e-sup').value;
@@ -334,18 +369,18 @@
                     ref: refDoc,
                     paymentMethod: method,
                     status: 'Aberto',
-                    itemsPurchased: (i === 0) ? window.tempItemsPurchased : []
+                    itemsPurchased: (i === 0) ? window.tempExpItems : []
                 };
                 await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/expenses')).push(data);
             }
 
-            if(window.tempItemsPurchased.length > 0) {
+            if(window.tempExpItems.length > 0) {
                 const stockRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'stock'));
                 const snapshot = await stockRef.once('value');
                 const currentStock = [];
                 if(snapshot.exists()) snapshot.forEach(c => currentStock.push({ ...c.val(), key: c.key }));
 
-                for(let newItem of window.tempItemsPurchased) {
+                for(let newItem of window.tempExpItems) {
                     const exist = currentStock.find(s => s.name.toLowerCase() === newItem.name.toLowerCase());
                     if(exist) {
                         await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${exist.key}`)).update({
@@ -360,12 +395,12 @@
             }
 
             App.utils.closeModal();
-            alert("Sucesso! Despesa lançada e itens adicionados ao estoque!");
+            alert("Despesa lançada com sucesso!");
         };
     };
 
     // ==================================================================
-    // 3. ESTOQUE (VISUALIZAÇÃO EM GRID)
+    // 3. ESTOQUE
     // ==================================================================
     function renderStock() {
         const div = document.getElementById('fin-content');
@@ -389,6 +424,7 @@
         });
     }
 
+    // --- UTILS ---
     window.delTx = (path, id) => { if(confirm("Excluir registro?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `${path}/${id}`)).remove(); };
     window.settleTx = (type, id) => {
         if(confirm("Confirmar transação?")) {
