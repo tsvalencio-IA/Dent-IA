@@ -20,7 +20,7 @@
     // 3. CONFIGURAÇÃO GOOGLE GEMINI API (IA)
     // Usamos o 1.5-flash por ser rápido. Se falhar, o ai.js tentará o gemini-pro.
     const GEMINI_MODEL = "gemini-1.5-flash"; 
-    const API_KEY = "AIzaSyDPtGLwgenIdC3G3Hkojl9JEy6TPpsaRhg"; 
+    const API_KEY = "AIzaSyAFAfXgdbMeXdGf42zWeYbNbBsi0LrvpvU"; 
 
     // 4. ITENS DE NAVEGAÇÃO
     const NAV_ITEMS = [
