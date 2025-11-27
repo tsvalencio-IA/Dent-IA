@@ -19,7 +19,7 @@
 
     // 3. CONFIGURAÇÃO GOOGLE GEMINI API
     // Usamos o Flash como padrão.
-    const GEMINI_MODEL = "gemini-1.5-flash"; 
+    const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
     
     // 🔴 COLE AQUI SUA CHAVE NOVA (CRIADA AGORA, SEM RESTRIÇÕES)
     const API_KEY = "AIzaSyDR8ZRm_vxoAxNoLy95MiNDk3WgkIkx3Tg"; 
