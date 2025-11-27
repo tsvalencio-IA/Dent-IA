@@ -1,13 +1,11 @@
 // ==================================================================
-// MÓDULO PORTAL DO PACIENTE (VERSÃO FINAL COM LOGIN/CADASTRO)
+// MÓDULO PORTAL DO PACIENTE (COM CORREÇÃO DE FLUXO DE CADASTRO)
 // ==================================================================
 (function() {
     var config = window.AppConfig;
     var appId = config.APP_ID;
     var db, auth, currentUser, myProfile, myDentistUid, selectedFile;
     var aiDirectives = null;
-    
-    // Controle de Modo (Login ou Cadastro)
     var isLoginMode = true; 
 
     function init() {
@@ -15,10 +13,13 @@
         db = firebase.database();
         auth = firebase.auth();
 
+        // Monitora estado de login
         auth.onAuthStateChanged(function(user) {
             if (user) {
                 currentUser = user;
-                findMyData(user.email);
+                // Pequeno delay para garantir que o banco carregue após cadastro
+                document.getElementById('p-submit-btn').textContent = "Carregando...";
+                setTimeout(() => findMyData(user.email), 1000); 
             } else {
                 showLogin();
             }
@@ -26,19 +27,22 @@
 
         document.getElementById('p-login-form').addEventListener('submit', handleAuthAction);
         
-        // Alternar entre Login e Cadastro
         document.getElementById('p-toggle-mode').addEventListener('click', function() {
             isLoginMode = !isLoginMode;
             var btn = document.getElementById('p-submit-btn');
             var toggle = document.getElementById('p-toggle-mode');
+            var title = document.querySelector('#patient-login h1');
             
             if(isLoginMode) {
+                title.textContent = "Bem-vindo, Paciente";
                 btn.textContent = "Acessar Meu Portal";
                 toggle.textContent = "Não tem senha? Criar conta";
             } else {
+                title.textContent = "Criar Acesso";
                 btn.textContent = "Criar Minha Senha";
                 toggle.textContent = "Já tenho conta. Fazer Login";
             }
+            document.getElementById('p-msg').textContent = "";
         });
 
         document.getElementById('p-logout').addEventListener('click', function() { auth.signOut(); });
@@ -64,21 +68,32 @@
         var email = document.getElementById('p-email').value;
         var pass = document.getElementById('p-pass').value;
         var msg = document.getElementById('p-msg');
+        var btn = document.getElementById('p-submit-btn');
+        
         msg.textContent = "";
+        btn.disabled = true;
+        btn.textContent = "Processando...";
 
         try { 
             if (isLoginMode) {
                 await auth.signInWithEmailAndPassword(email, pass); 
             } else {
                 await auth.createUserWithEmailAndPassword(email, pass);
-                // Após criar, o onAuthStateChanged vai disparar e tentar encontrar o email na base do dentista
+                msg.className = "text-green-600 text-xs mt-3 h-4";
+                msg.textContent = "Conta criada com sucesso! Verificando cadastro...";
             }
         } 
         catch (error) { 
+            btn.disabled = false;
+            btn.textContent = isLoginMode ? "Acessar Meu Portal" : "Criar Minha Senha";
+            msg.className = "text-red-500 text-xs mt-3 h-4";
+            
             if(error.code === 'auth/email-already-in-use') {
-                msg.textContent = "Este email já tem cadastro. Tente fazer login.";
+                msg.textContent = "Este email já possui senha. Tente fazer login.";
             } else if(error.code === 'auth/weak-password') {
                 msg.textContent = "A senha deve ter pelo menos 6 caracteres.";
+            } else if(error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                msg.textContent = "Email ou senha incorretos.";
             } else {
                 msg.textContent = "Erro: " + error.message; 
             }
@@ -88,6 +103,9 @@
     function showLogin() {
         document.getElementById('patient-login').classList.remove('hidden');
         document.getElementById('patient-app').classList.add('hidden');
+        var btn = document.getElementById('p-submit-btn');
+        btn.disabled = false;
+        btn.textContent = isLoginMode ? "Acessar Meu Portal" : "Criar Minha Senha";
     }
 
     async function findMyData(email) {
@@ -114,11 +132,19 @@
                     }
                 });
             }
-            if (found) loadInterface();
-            else { 
-                // Se o paciente criou a conta mas o dentista não cadastrou o email dele ainda
-                alert("Seu email não foi encontrado na base da clínica. Peça ao dentista para cadastrar: " + email); 
-                auth.signOut(); 
+            
+            if (found) {
+                loadInterface();
+            } else { 
+                // Se não encontrou, deleta o user criado para não ficar "preso" num login sem dados
+                var user = auth.currentUser;
+                user.delete().then(function() {
+                    alert("Atenção: Seu email (" + email + ") não foi encontrado no cadastro da clínica.\n\nPor favor, peça para o dentista cadastrar seu email primeiro.");
+                    location.reload(); // Recarrega para limpar tudo
+                }).catch(function(error) {
+                    auth.signOut();
+                    alert("Email não cadastrado pela clínica.");
+                });
             }
         });
     }
@@ -216,16 +242,9 @@
         if (window.callGeminiAPI && text) {
             var context = "";
             if (aiDirectives) {
-                context = `
-                    ${aiDirectives}
-                    ---
-                    ATENÇÃO: MODO 1 (SECRETÁRIA). Fale com o PACIENTE.
-                    Seja curta e educada. Não dê diagnósticos.
-                    Paciente: ${myProfile.name}.
-                    Msg: "${text}"
-                `;
+                context = `${aiDirectives}\n--- MODO 1 (SECRETÁRIA) ---\nPaciente: ${myProfile.name}\nMsg: "${text}"`;
             } else {
-                context = `ATUE COMO: Secretária. PACIENTE: ${myProfile.name}. MSG: "${text}". Seja breve.`;
+                context = `ATUE COMO: Secretária. PACIENTE: ${myProfile.name}. MSG: "${text}"`;
             }
 
             var reply = await window.callGeminiAPI(context, text);
