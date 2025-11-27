@@ -7,7 +7,7 @@
 
     // Lista atualizada: Apenas modelos V1.5 ativos
     // Se o Flash falhar, tenta o Pro (mais robusto)
-    const MODELS_TO_TRY = ["gemini-1.5-flash", "gemini-1.5-pro"];
+    const MODELS_TO_TRY = ["gemini-2.5-flash-preview-09-2025"];
 
     async function tryGenerate(modelName, systemPrompt, userMessage) {
         console.log(`🤖 Testando modelo: ${modelName}...`);
