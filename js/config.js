@@ -1,3 +1,6 @@
+// =====================================================================
+// 🔑 ARQUIVO DE CONFIGURAÇÃO: js/config.js
+// =====================================================================
 (function() {
     const firebaseConfig = {
         apiKey: "AIzaSyBs1EWOvZXw52Ih-m_mhsCofRcjmxY8xQw",
@@ -15,13 +18,12 @@
         { id: 'financials', label: 'Financeiro & Estoque', icon: 'bxs-wallet' },
     ];
 
-    // EXPORTA PARA O ESCOPO GLOBAL
     window.AppConfig = {
         firebaseConfig,
         CLOUDINARY_CLOUD_NAME: "djtiaygrs",
         CLOUDINARY_UPLOAD_PRESET: "dental",
-        GEMINI_MODEL: "gemini-2.5-flash-preview-09-2025",
-        API_KEY: "AIzaSyDPtGLwgenIdC3G3Hkojl9JEy6TPpsaRhg", // <--- COLOQUE SUA CHAVE NOVA AQUI
+        GEMINI_MODEL: "gemini-1.5-flash", // Modelo estável
+        API_KEY: "AIzaSyDPtGLwgenIdC3G3Hkojl9JEy6TPpsaRhg", 
         APP_ID: 'dentista-inteligente-app',
         NAV_ITEMS
     };
