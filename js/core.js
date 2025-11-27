@@ -1,26 +1,30 @@
 // ==================================================================
-// MÓDULO CENTRAL (CORE) - Login, Navegação e Dados Globais
+// MÓDULO CORE: Gerencia Estado Global, Banco de Dados e Rotas
 // ==================================================================
 (function() {
-    // ESTADO GLOBAL COMPARTILHADO
+    // 1. ESTADO GLOBAL (A "Cola" do sistema)
     window.DentistaApp = {
         db: null, auth: null, currentUser: null, currentView: 'dashboard',
         data: { patients: [], receivables: [], stock: [], expenses: [] },
         utils: {
             formatCurrency: v => 'R$ ' + parseFloat(v||0).toFixed(2).replace('.', ','),
             formatDate: d => d ? new Date(d).toLocaleDateString('pt-BR') : '-',
+            formatDateTime: d => d ? new Date(d).toLocaleString('pt-BR') : '-',
             getAdminPath: (uid, path) => `artifacts/${window.AppConfig.APP_ID}/users/${uid}/${path}`,
+            
+            // Controle de Modal Global
             openModal: (title, html, maxW) => {
                 const m = document.getElementById('app-modal');
-                if(!m) return;
-                m.querySelector('.modal-content').className = 'modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ' + (maxW || 'max-w-md');
+                const content = m.querySelector('.modal-content');
+                // Reseta classes de largura e aplica a nova
+                content.className = `modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ${maxW || 'max-w-md'}`;
                 document.getElementById('modal-title').textContent = title;
                 document.getElementById('modal-body').innerHTML = html;
                 m.classList.remove('hidden'); m.classList.add('flex');
             },
             closeModal: () => { 
                 const m = document.getElementById('app-modal');
-                if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+                m.classList.add('hidden'); m.classList.remove('flex');
             }
         }
     };
@@ -33,55 +37,63 @@
         App.db = firebase.database();
         App.auth = firebase.auth();
         setupAuth();
-        setupListeners();
+        setupUIListeners();
     }
 
+    // 2. AUTENTICAÇÃO E CARREGAMENTO DE DADOS
     function setupAuth() {
         App.auth.onAuthStateChanged(user => {
             if (user) {
+                // Verifica perfil
                 const ref = App.db.ref(App.utils.getAdminPath(user.uid, 'profile'));
                 ref.once('value').then(s => {
                     const p = s.val();
-                    if ((p && p.role === 'dentist') || user.email === 'admin@ts.com') {
+                    if ((p && p.role === 'dentist') || !p) { // Permite primeiro acesso ou dentista
                         App.currentUser = { uid: user.uid, email: user.email };
-                        if (!p && user.email === 'admin@ts.com') ref.set({ email: user.email, role: 'dentist', registeredAt: new Date().toISOString() });
-                        loadData(); 
-                        showUI();
-                    } else { alert("Acesso restrito."); App.auth.signOut(); }
+                        if (!p) ref.set({ email: user.email, role: 'dentist', registeredAt: new Date().toISOString() });
+                        
+                        startDataListeners(); // <--- INICIA O DOWNLOAD DOS DADOS
+                        showAppInterface();
+                    } else { 
+                        alert("Acesso negado. Apenas dentistas."); App.auth.signOut(); 
+                    }
                 });
-            } else { App.currentUser = null; showLogin(); }
+            } else { App.currentUser = null; showLoginInterface(); }
         });
     }
 
-    function loadData() {
+    // 3. LISTENERS EM TEMPO REAL (FIREBASE)
+    function startDataListeners() {
         const uid = App.currentUser.uid;
-        const endpoints = { 'patients': 'patients', 'stock': 'stock', 'finance/receivable': 'receivables', 'finance/expenses': 'expenses' };
+        const maps = { 
+            'patients': 'patients', 
+            'stock': 'stock', 
+            'finance/receivable': 'receivables', 
+            'finance/expenses': 'expenses' 
+        };
         
-        Object.keys(endpoints).forEach(path => {
+        // Cria um listener para cada nó do banco
+        Object.keys(maps).forEach(path => {
             App.db.ref(App.utils.getAdminPath(uid, path)).on('value', s => {
-                App.data[endpoints[path]] = [];
-                if(s.exists()) s.forEach(c => { let i = c.val(); i.id = c.key; App.data[endpoints[path]].push(i); });
-                refreshView();
+                App.data[maps[path]] = [];
+                if(s.exists()) {
+                    s.forEach(c => { 
+                        let item = c.val(); 
+                        item.id = c.key; 
+                        App.data[maps[path]].push(item); 
+                    });
+                }
+                refreshCurrentView(); // Atualiza a tela se algo mudar
             });
         });
     }
 
-    function refreshView() {
+    // 4. RENDERIZAÇÃO E NAVEGAÇÃO
+    function refreshCurrentView() {
+        // Redireciona para as funções globais exportadas pelos outros módulos
         if (App.currentView === 'dashboard') renderDashboard();
         else if (App.currentView === 'patients' && window.renderPatientManager) window.renderPatientManager();
-        else if (App.currentView === 'financials' && window.renderFinancialManager) window.renderFinancialManager();
-    }
-
-    function showLogin() { document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('app-container').classList.add('hidden'); }
-    function showUI() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('app-container').classList.remove('hidden'); renderSidebar(); navigateTo('dashboard'); }
-
-    function navigateTo(view) {
-        App.currentView = view;
-        document.getElementById('main-content').innerHTML = '';
-        refreshView();
-        document.querySelectorAll('#nav-menu button').forEach(btn => {
-            btn.className = btn.dataset.view === view ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
-        });
+        else if (App.currentView === 'financials' && window.initFinanceView) window.initFinanceView();
     }
 
     function renderDashboard() {
@@ -89,30 +101,39 @@
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
         
         document.getElementById('main-content').innerHTML = `
-            <div class="p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100">
+            <div class="p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100 animate-fade-in">
                 <h2 class="text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PACIENTES</p><h3 class="text-2xl font-bold text-indigo-800">${App.data.patients.length}</h3></div>
-                    <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-sm text-gray-600">ESTOQUE</p><h3 class="text-2xl font-bold text-green-800">${App.data.stock.length}</h3></div>
-                    <div class="p-4 bg-yellow-100 rounded-lg"><p class="font-bold text-sm text-gray-600">CAIXA (REAL)</p><h3 class="text-2xl font-bold text-yellow-800">${App.utils.formatCurrency(totalRec)}</h3></div>
-                    <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PAGO (DESPESAS)</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
-                </div>
-                <div class="border p-4 rounded-xl bg-gray-50">
-                    <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica (IA)</h3>
-                    <textarea id="brain-input" class="w-full p-2 border rounded text-sm" rows="3"></textarea>
-                    <button id="save-brain" class="mt-2 bg-indigo-600 text-white px-4 py-1 rounded shadow">Salvar Diretrizes</button>
+                    <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-xs uppercase text-indigo-600">Pacientes</p><h3 class="text-3xl font-bold text-indigo-900">${App.data.patients.length}</h3></div>
+                    <div class="p-4 bg-blue-100 rounded-lg"><p class="font-bold text-xs uppercase text-blue-600">Estoque</p><h3 class="text-3xl font-bold text-blue-900">${App.data.stock.length}</h3></div>
+                    <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-xs uppercase text-green-600">Caixa Real</p><h3 class="text-2xl font-bold text-green-800">${App.utils.formatCurrency(totalRec)}</h3></div>
+                    <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-xs uppercase text-red-600">Pago</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
                 </div>
                 
-                <div class="mt-6 border-t pt-4 text-right">
-                     <button onclick="window.hardResetSystem()" class="text-xs text-red-400 hover:text-red-600 underline">Resetar Dados (Cuidado!)</button>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h3 class="font-bold text-gray-700 mb-2 flex items-center"><i class='bx bxs-brain text-purple-600 mr-2'></i> Diretrizes da IA</h3>
+                    <textarea id="brain-input" class="w-full p-3 border rounded text-sm focus:ring-2 focus:ring-purple-500 outline-none" rows="2" placeholder="Ex: Priorize tratamentos estéticos nas sugestões..."></textarea>
+                    <button id="save-brain" class="mt-2 bg-purple-600 text-white px-4 py-1 rounded text-sm hover:bg-purple-700 transition">Salvar Cérebro</button>
                 </div>
-                
-                <footer class="text-center py-4 text-xs text-gray-400 mt-8">Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong></footer>
             </div>`;
-        
-        const brainPath = App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives');
-        App.db.ref(brainPath).once('value', s => { if(s.exists()) document.getElementById('brain-input').value = s.val().promptDirectives; });
-        document.getElementById('save-brain').onclick = () => { App.db.ref(brainPath).update({ promptDirectives: document.getElementById('brain-input').value }); alert("Cérebro atualizado!"); };
+            
+        // Carrega config da IA
+        const brainRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives'));
+        brainRef.once('value', s => { if(s.exists()) document.getElementById('brain-input').value = s.val().promptDirectives; });
+        document.getElementById('save-brain').onclick = () => { brainRef.update({ promptDirectives: document.getElementById('brain-input').value }); alert("IA Atualizada!"); };
+    }
+
+    // 5. AUXILIARES DE UI
+    function showLoginInterface() { document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('app-container').classList.add('hidden'); }
+    function showAppInterface() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('app-container').classList.remove('hidden'); renderSidebar(); navigateTo('dashboard'); }
+
+    function navigateTo(view) {
+        App.currentView = view;
+        refreshCurrentView();
+        document.querySelectorAll('#nav-menu button').forEach(btn => {
+            const active = btn.dataset.view === view;
+            btn.className = active ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg transition' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white transition';
+        });
     }
 
     function renderSidebar() {
@@ -120,30 +141,29 @@
         window.AppConfig.NAV_ITEMS.forEach(item => {
             const btn = document.createElement('button');
             btn.dataset.view = item.id;
-            btn.className = 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
+            btn.className = 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200';
             btn.innerHTML = `<i class='bx ${item.icon} text-xl mr-3'></i><span class='font-semibold'>${item.label}</span>`;
             btn.onclick = () => navigateTo(item.id);
             menu.appendChild(btn);
         });
     }
 
-    function setupListeners() {
+    function setupUIListeners() {
         document.getElementById('close-modal').addEventListener('click', App.utils.closeModal);
         document.getElementById('logout-button').addEventListener('click', () => App.auth.signOut().then(() => window.location.reload()));
-        
+
+        // Login / Cadastro
         const form = document.getElementById('auth-form');
         const newForm = form.cloneNode(true); form.parentNode.replaceChild(newForm, form);
+        
         newForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('auth-email').value;
-            const pass = document.getElementById('auth-password').value;
+            const em = document.getElementById('auth-email').value;
+            const pw = document.getElementById('auth-password').value;
             try {
-                if (isLoginMode) await App.auth.signInWithEmailAndPassword(email, pass);
-                else {
-                    const c = await App.auth.createUserWithEmailAndPassword(email, pass);
-                    await App.db.ref(App.utils.getAdminPath(c.user.uid, 'profile')).set({ email, role: 'dentist', registeredAt: new Date().toISOString() });
-                }
-            } catch(e) { alert("Erro Login: " + e.message); }
+                if (isLoginMode) await App.auth.signInWithEmailAndPassword(em, pw);
+                else await App.auth.createUserWithEmailAndPassword(em, pw);
+            } catch(err) { alert("Erro: " + err.message); }
         });
 
         document.getElementById('toggle-auth-mode').addEventListener('click', () => {
@@ -151,19 +171,6 @@
             document.getElementById('auth-submit-btn').textContent = isLoginMode ? 'Entrar' : 'Cadastrar';
         });
     }
-
-    // Função de Reset Global
-    window.hardResetSystem = () => {
-        const pwd = prompt("ATENÇÃO: Isso apagará TODOS os pacientes, finanças e estoque.\nDigite 'CONFIRMAR' para prosseguir:");
-        if(pwd === 'CONFIRMAR') {
-            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, '')).remove()
-                .then(() => {
-                    alert("Sistema resetado com sucesso.");
-                    window.location.reload();
-                })
-                .catch(e => alert("Erro ao resetar: " + e.message));
-        }
-    };
 
     document.addEventListener('DOMContentLoaded', init);
 })();
