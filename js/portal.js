@@ -82,14 +82,6 @@
         document.getElementById('p-treatment').textContent = myProfile.treatmentType;
         document.getElementById('p-status').textContent = 'Ativo';
         
-        // INJEÇÃO DO RODAPÉ
-        if(!document.querySelector('footer')) {
-             var footer = document.createElement('footer');
-             footer.className = 'text-center py-4 text-xs text-gray-400 bg-white mt-auto w-full border-t border-gray-100';
-             footer.innerHTML = 'Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong>';
-             document.getElementById('patient-app').appendChild(footer);
-        }
-
         loadTimeline();
         loadFinance();
     }
