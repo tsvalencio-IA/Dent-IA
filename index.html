@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dentista Inteligente ERP</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
@@ -33,7 +33,10 @@
     </div>
 
     <header class="md:hidden bg-indigo-900 text-white p-4 flex justify-between items-center shadow-md z-40 shrink-0">
-        <div class="font-bold text-lg flex items-center gap-2"><i class='bx bxs-tooth'></i> DentIA</div>
+        <div class="font-bold text-lg flex items-center gap-2">
+            <i class='bx bxs-tooth text-2xl'></i> 
+            DentIA
+        </div>
         <button id="mobile-menu-btn" class="text-white text-3xl focus:outline-none active:scale-90 transition">
             <i class='bx bx-menu'></i>
         </button>
@@ -44,8 +47,9 @@
         <div id="mobile-overlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
 
         <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-indigo-900 text-white flex flex-col shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out md:relative md:translate-x-0">
-            <div class="p-6 text-2xl font-bold flex items-center gap-2 border-b border-indigo-800">
-                <i class='bx bxs-tooth'></i> DentIA
+            <div class="p-6 text-2xl font-bold flex items-center gap-3 border-b border-indigo-800">
+                <i class='bx bxs-tooth text-white'></i> 
+                <span>DentIA</span>
             </div>
             <nav id="nav-menu" class="flex-grow p-4 space-y-2 overflow-y-auto"></nav>
             <button id="logout-button" class="p-4 flex items-center text-red-300 hover:bg-red-900 hover:text-white transition mt-auto border-t border-indigo-800">
