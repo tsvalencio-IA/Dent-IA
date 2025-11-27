@@ -2,7 +2,7 @@
 // MÓDULO CORE: Gerencia Estado Global, Banco de Dados e Rotas
 // ==================================================================
 (function() {
-    // 1. ESTADO GLOBAL (A "Cola" do sistema)
+    // 1. ESTADO GLOBAL
     window.DentistaApp = {
         db: null, auth: null, currentUser: null, currentView: 'dashboard',
         data: { patients: [], receivables: [], stock: [], expenses: [] },
@@ -12,11 +12,9 @@
             formatDateTime: d => d ? new Date(d).toLocaleString('pt-BR') : '-',
             getAdminPath: (uid, path) => `artifacts/${window.AppConfig.APP_ID}/users/${uid}/${path}`,
             
-            // Controle de Modal Global
             openModal: (title, html, maxW) => {
                 const m = document.getElementById('app-modal');
                 const content = m.querySelector('.modal-content');
-                // Reseta classes de largura e aplica a nova
                 content.className = `modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ${maxW || 'max-w-md'}`;
                 document.getElementById('modal-title').textContent = title;
                 document.getElementById('modal-body').innerHTML = html;
@@ -40,19 +38,18 @@
         setupUIListeners();
     }
 
-    // 2. AUTENTICAÇÃO E CARREGAMENTO DE DADOS
+    // 2. AUTENTICAÇÃO
     function setupAuth() {
         App.auth.onAuthStateChanged(user => {
             if (user) {
-                // Verifica perfil
                 const ref = App.db.ref(App.utils.getAdminPath(user.uid, 'profile'));
                 ref.once('value').then(s => {
                     const p = s.val();
-                    if ((p && p.role === 'dentist') || !p) { // Permite primeiro acesso ou dentista
+                    if ((p && p.role === 'dentist') || !p) {
                         App.currentUser = { uid: user.uid, email: user.email };
                         if (!p) ref.set({ email: user.email, role: 'dentist', registeredAt: new Date().toISOString() });
                         
-                        startDataListeners(); // <--- INICIA O DOWNLOAD DOS DADOS
+                        startDataListeners();
                         showAppInterface();
                     } else { 
                         alert("Acesso negado. Apenas dentistas."); App.auth.signOut(); 
@@ -62,9 +59,8 @@
         });
     }
 
-    // 3. LISTENERS EM TEMPO REAL (FIREBASE)
+    // 3. LISTENERS DADOS
     function startDataListeners() {
-        // SEGURANÇA: Se não tem user, não tenta buscar dados
         if (!App.currentUser || !App.currentUser.uid) return;
 
         const uid = App.currentUser.uid;
@@ -75,7 +71,6 @@
             'finance/expenses': 'expenses' 
         };
         
-        // Cria um listener para cada nó do banco
         Object.keys(maps).forEach(path => {
             App.db.ref(App.utils.getAdminPath(uid, path)).on('value', s => {
                 App.data[maps[path]] = [];
@@ -86,48 +81,50 @@
                         App.data[maps[path]].push(item); 
                     });
                 }
-                refreshCurrentView(); // Atualiza a tela se algo mudar
+                refreshCurrentView();
             });
         });
     }
 
-    // 4. RENDERIZAÇÃO E NAVEGAÇÃO
+    // 4. NAVEGAÇÃO
     function refreshCurrentView() {
-        // Redireciona para as funções globais exportadas pelos outros módulos
         if (App.currentView === 'dashboard') renderDashboard();
         else if (App.currentView === 'patients' && window.renderPatientManager) window.renderPatientManager();
         else if (App.currentView === 'financials' && window.initFinanceView) window.initFinanceView();
     }
 
     function renderDashboard() {
-        // BLINDAGEM DE SEGURANÇA: Se não houver usuário logado, aborta renderização
         if (!App.currentUser || !App.currentUser.uid) return;
 
         const totalRec = App.data.receivables.reduce((acc, r) => r.status === 'Recebido' ? acc + parseFloat(r.amount||0) : acc, 0);
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
         
         document.getElementById('main-content').innerHTML = `
-            <div class="p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100 animate-fade-in">
-                <h2 class="text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-xs uppercase text-indigo-600">Pacientes</p><h3 class="text-3xl font-bold text-indigo-900">${App.data.patients.length}</h3></div>
-                    <div class="p-4 bg-blue-100 rounded-lg"><p class="font-bold text-xs uppercase text-blue-600">Estoque</p><h3 class="text-3xl font-bold text-blue-900">${App.data.stock.length}</h3></div>
-                    <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-xs uppercase text-green-600">Caixa Real</p><h3 class="text-2xl font-bold text-green-800">${App.utils.formatCurrency(totalRec)}</h3></div>
-                    <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-xs uppercase text-red-600">Pago</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
-                </div>
-                
-                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <h3 class="font-bold text-gray-700 mb-2 flex items-center"><i class='bx bxs-brain text-purple-600 mr-2'></i> Diretrizes da IA</h3>
-                    <textarea id="brain-input" class="w-full p-3 border rounded text-sm focus:ring-2 focus:ring-purple-500 outline-none" rows="2" placeholder="Ex: Priorize tratamentos estéticos nas sugestões..."></textarea>
-                    <button id="save-brain" class="mt-2 bg-purple-600 text-white px-4 py-1 rounded text-sm hover:bg-purple-700 transition">Salvar Cérebro</button>
-                </div>
+            <div class="p-4 md:p-8 overflow-y-auto h-full">
+                <div class="bg-white shadow-xl rounded-2xl border border-indigo-100 animate-fade-in p-6">
+                    <h2 class="text-2xl md:text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+                        <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-indigo-600">Pacientes</p><h3 class="text-xl md:text-3xl font-bold text-indigo-900">${App.data.patients.length}</h3></div>
+                        <div class="p-4 bg-blue-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-blue-600">Estoque</p><h3 class="text-xl md:text-3xl font-bold text-blue-900">${App.data.stock.length}</h3></div>
+                        <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-green-600">Caixa Real</p><h3 class="text-lg md:text-2xl font-bold text-green-800">${App.utils.formatCurrency(totalRec)}</h3></div>
+                        <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-red-600">Pago</p><h3 class="text-lg md:text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <h3 class="font-bold text-gray-700 mb-2 flex items-center"><i class='bx bxs-brain text-purple-600 mr-2'></i> Diretrizes da IA</h3>
+                        <textarea id="brain-input" class="w-full p-3 border rounded text-sm focus:ring-2 focus:ring-purple-500 outline-none" rows="2" placeholder="Ex: Priorize tratamentos estéticos nas sugestões..."></textarea>
+                        <button id="save-brain" class="mt-2 bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition w-full md:w-auto">Salvar Cérebro</button>
+                    </div>
 
-                <div class="mt-6 border-t pt-4 text-right">
-                     <button onclick="window.hardResetSystem()" class="text-xs text-red-400 hover:text-red-600 underline">Resetar Dados (Cuidado!)</button>
+                    <div class="mt-6 border-t pt-4 text-right">
+                         <button onclick="window.hardResetSystem()" class="text-xs text-red-400 hover:text-red-600 underline">Resetar Dados (Cuidado!)</button>
+                    </div>
                 </div>
+                <footer class="text-center py-6 text-xs text-gray-400 mt-4">
+                    Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>
+                </footer>
             </div>`;
             
-        // Carrega config da IA
         const brainRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives'));
         brainRef.once('value', s => { 
             const input = document.getElementById('brain-input');
@@ -143,13 +140,31 @@
         }
     }
 
-    // 5. AUXILIARES DE UI
-    function showLoginInterface() { document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('app-container').classList.add('hidden'); }
-    function showAppInterface() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('app-container').classList.remove('hidden'); renderSidebar(); navigateTo('dashboard'); }
+    // 5. INTERFACE & MOBILE MENU
+    function showLoginInterface() { 
+        document.getElementById('login-screen').classList.remove('hidden'); 
+        document.getElementById('app-container').classList.add('hidden'); 
+        document.querySelector('header').classList.add('hidden'); // Esconde header mobile no login
+    }
+    
+    function showAppInterface() { 
+        document.getElementById('login-screen').classList.add('hidden'); 
+        document.getElementById('app-container').classList.remove('hidden'); 
+        document.querySelector('header').classList.remove('hidden'); // Mostra header mobile
+        renderSidebar(); 
+        navigateTo('dashboard'); 
+    }
 
     function navigateTo(view) {
         App.currentView = view;
         refreshCurrentView();
+        
+        // Fecha menu mobile ao navegar
+        const sb = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        sb.classList.add('-translate-x-full'); // Esconde sidebar
+        overlay.classList.add('hidden'); // Esconde overlay
+
         document.querySelectorAll('#nav-menu button').forEach(btn => {
             const active = btn.dataset.view === view;
             btn.className = active ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg transition' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white transition';
@@ -172,7 +187,33 @@
         document.getElementById('close-modal').addEventListener('click', App.utils.closeModal);
         document.getElementById('logout-button').addEventListener('click', () => App.auth.signOut().then(() => window.location.reload()));
 
-        // Login / Cadastro
+        // --- LÓGICA DO MENU MOBILE ---
+        const btnMobile = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+
+        if(btnMobile) {
+            btnMobile.addEventListener('click', () => {
+                const isClosed = sidebar.classList.contains('-translate-x-full');
+                if(isClosed) {
+                    sidebar.classList.remove('-translate-x-full'); // Abre
+                    overlay.classList.remove('hidden');
+                } else {
+                    sidebar.classList.add('-translate-x-full'); // Fecha
+                    overlay.classList.add('hidden');
+                }
+            });
+        }
+
+        // Fechar ao clicar no overlay
+        if(overlay) {
+            overlay.addEventListener('click', () => {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            });
+        }
+
+        // Login Form
         const form = document.getElementById('auth-form');
         const newForm = form.cloneNode(true); form.parentNode.replaceChild(newForm, form);
         
@@ -192,7 +233,6 @@
         });
     }
 
-    // Função de Reset Global
     window.hardResetSystem = () => {
         const pwd = prompt("ATENÇÃO: Isso apagará TODOS os pacientes, finanças e estoque.\nDigite 'CONFIRMAR' para prosseguir:");
         if(pwd === 'CONFIRMAR') {
