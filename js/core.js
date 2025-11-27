@@ -2,20 +2,27 @@
 // MÓDULO CENTRAL (CORE) - Login, Navegação e Dados Globais
 // ==================================================================
 (function() {
-    // ESTADO GLOBAL COMPARTILHADO (Acessível por todos os módulos via window.DentistaApp)
+    // ESTADO GLOBAL COMPARTILHADO
     window.DentistaApp = {
         db: null, auth: null, currentUser: null, currentView: 'dashboard',
-        // Caches de Dados
         data: { patients: [], receivables: [], stock: [], expenses: [] },
-        // Utilitários Globais
         utils: {
             formatCurrency: v => 'R$ ' + parseFloat(v||0).toFixed(2).replace('.', ','),
-            formatDate: d => d ? new Date(d).toLocaleDateString('pt-BR') : '-',
+            formatDate: d => {
+                if(!d) return '-';
+                // Correção de fuso horário simples para datas YYYY-MM-DD
+                const date = new Date(d);
+                const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+                return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
+            },
             getAdminPath: (uid, path) => `artifacts/${window.AppConfig.APP_ID}/users/${uid}/${path}`,
+            
+            // MODAL RESPONSIVO GLOBAL
             openModal: (title, html, maxW) => {
                 const m = document.getElementById('app-modal');
-                if(!m) return;
-                m.querySelector('.modal-content').className = 'modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ' + (maxW || 'max-w-md');
+                const content = m.querySelector('.modal-content');
+                // Ajuste Mobile: w-11/12 (quase tela toda no cel) e largura fixa no desktop
+                content.className = `modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-11/12 ${maxW || 'md:max-w-2xl'}`;
                 document.getElementById('modal-title').textContent = title;
                 document.getElementById('modal-body').innerHTML = html;
                 m.classList.remove('hidden'); m.classList.add('flex');
@@ -41,54 +48,30 @@
     function setupAuth() {
         App.auth.onAuthStateChanged(user => {
             if (user) {
-                // Verifica se é Dentista
                 const ref = App.db.ref(App.utils.getAdminPath(user.uid, 'profile'));
                 ref.once('value').then(s => {
                     const p = s.val();
                     if ((p && p.role === 'dentist') || user.email === 'admin@ts.com') {
                         App.currentUser = { uid: user.uid, email: user.email };
-                        // Auto-fix Admin se não existir perfil
                         if (!p && user.email === 'admin@ts.com') ref.set({ email: user.email, role: 'dentist', registeredAt: new Date().toISOString() });
-                        
-                        loadData(); // Inicia carregamento dos dados
+                        loadData(); 
                         showUI();
-                    } else {
-                        alert("Acesso restrito. Este painel é apenas para Dentistas.");
-                        App.auth.signOut();
-                    }
+                    } else { alert("Acesso restrito."); App.auth.signOut(); }
                 });
-            } else {
-                App.currentUser = null;
-                showLogin();
-            }
+            } else { App.currentUser = null; showLogin(); }
         });
     }
 
     function loadData() {
         const uid = App.currentUser.uid;
-        // Carrega Pacientes
-        App.db.ref(App.utils.getAdminPath(uid, 'patients')).on('value', s => {
-            App.data.patients = [];
-            if(s.exists()) s.forEach(c => { let p = c.val(); p.id = c.key; App.data.patients.push(p); });
-            refreshView();
-        });
-        // Carrega Estoque
-        App.db.ref(App.utils.getAdminPath(uid, 'stock')).on('value', s => {
-            App.data.stock = [];
-            if(s.exists()) s.forEach(c => { let i = c.val(); i.id = c.key; App.data.stock.push(i); });
-            refreshView();
-        });
-        // Carrega Receitas
-        App.db.ref(App.utils.getAdminPath(uid, 'finance/receivable')).on('value', s => {
-            App.data.receivables = [];
-            if(s.exists()) s.forEach(c => { let r = c.val(); r.id = c.key; App.data.receivables.push(r); });
-            refreshView();
-        });
-        // Carrega Despesas
-        App.db.ref(App.utils.getAdminPath(uid, 'finance/expenses')).on('value', s => {
-            App.data.expenses = [];
-            if(s.exists()) s.forEach(c => { let e = c.val(); e.id = c.key; App.data.expenses.push(e); });
-            refreshView();
+        const endpoints = { 'patients': 'patients', 'stock': 'stock', 'finance/receivable': 'receivables', 'finance/expenses': 'expenses' };
+        
+        Object.keys(endpoints).forEach(path => {
+            App.db.ref(App.utils.getAdminPath(uid, path)).on('value', s => {
+                App.data[endpoints[path]] = [];
+                if(s.exists()) s.forEach(c => { let i = c.val(); i.id = c.key; App.data[endpoints[path]].push(i); });
+                refreshView();
+            });
         });
     }
 
@@ -106,6 +89,11 @@
         document.getElementById('main-content').innerHTML = '';
         refreshView();
         
+        // Fecha sidebar no mobile ao clicar (UX)
+        if(window.innerWidth < 1024) {
+            // Lógica futura para fechar menu hamburguer se existir
+        }
+
         document.querySelectorAll('#nav-menu button').forEach(btn => {
             const active = btn.dataset.view === view;
             btn.className = active ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
@@ -117,18 +105,18 @@
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
         
         document.getElementById('main-content').innerHTML = `
-            <div class="p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100">
-                <h2 class="text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="p-4 md:p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100">
+                <h2 class="text-2xl md:text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PACIENTES</p><h3 class="text-2xl font-bold text-indigo-800">${App.data.patients.length}</h3></div>
                     <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-sm text-gray-600">ESTOQUE</p><h3 class="text-2xl font-bold text-green-800">${App.data.stock.length}</h3></div>
                     <div class="p-4 bg-yellow-100 rounded-lg"><p class="font-bold text-sm text-gray-600">CAIXA (REAL)</p><h3 class="text-2xl font-bold text-yellow-800">${App.utils.formatCurrency(totalRec)}</h3></div>
                     <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PAGO (DESPESAS)</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
                 </div>
                 <div class="border p-4 rounded-xl bg-gray-50">
-                    <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica (Diretrizes IA)</h3>
+                    <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica (IA)</h3>
                     <textarea id="brain-input" class="w-full p-2 border rounded text-sm bg-gray-50" rows="3" placeholder="Ex: Atuar como especialista em implantes..."></textarea>
-                    <button id="save-brain" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded shadow">Salvar Diretrizes</button>
+                    <button id="save-brain" class="mt-2 w-full md:w-auto bg-indigo-600 text-white px-4 py-2 rounded shadow">Salvar Diretrizes</button>
                 </div>
                 <footer class="text-center py-4 text-xs text-gray-400 mt-8">Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong></footer>
             </div>`;
