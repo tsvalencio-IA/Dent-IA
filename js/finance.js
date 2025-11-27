@@ -1,254 +1,424 @@
 // ==================================================================
-// MÓDULO FINANCEIRO: Parcelamento, Despesas e Estoque
+// MÓDULO FINANCEIRO COMPLETO (ERP: PARCELAS + ESTOQUE AUTOMÁTICO)
 // ==================================================================
 (function() {
-    const App = window.DentistaApp; // Atalho para o estado global
+    const App = window.DentistaApp;
 
-    // Função Principal chamada pelo Core.js
+    // --- VIEW PRINCIPAL ---
     window.initFinanceView = function() {
         const container = document.getElementById('main-content');
         container.innerHTML = `
-            <div class="p-6 bg-white shadow-lg rounded-2xl h-[calc(100vh-100px)] flex flex-col">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold text-indigo-800 flex items-center"><i class='bx bxs-wallet mr-2'></i> Financeiro & Estoque</h2>
-                </div>
-                
-                <div class="flex border-b mb-4 gap-4">
-                    <button class="px-4 py-2 border-b-2 border-transparent hover:border-indigo-500 font-bold text-gray-600 focus:outline-none" onclick="renderReceivablesList()">💰 Receitas</button>
-                    <button class="px-4 py-2 border-b-2 border-transparent hover:border-red-500 font-bold text-gray-600 focus:outline-none" onclick="renderExpensesList()">💸 Despesas</button>
-                    <button class="px-4 py-2 border-b-2 border-transparent hover:border-blue-500 font-bold text-gray-600 focus:outline-none" onclick="renderStockList()">📦 Estoque</button>
+            <div class="flex flex-col h-[calc(100vh-80px)]">
+                <div class="bg-white px-4 pt-4 shadow-sm border-b flex gap-6 overflow-x-auto shrink-0">
+                    <button onclick="switchTab('rec')" id="tab-rec" class="pb-3 border-b-2 border-indigo-600 text-indigo-700 font-bold text-sm whitespace-nowrap transition">💰 Receitas (Serviços)</button>
+                    <button onclick="switchTab('exp')" id="tab-exp" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-red-500 font-bold text-sm whitespace-nowrap transition">💸 Despesas (Compras)</button>
+                    <button onclick="switchTab('stk')" id="tab-stk" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-blue-500 font-bold text-sm whitespace-nowrap transition">📦 Estoque Atual</button>
                 </div>
 
-                <div id="fin-content" class="flex-grow overflow-y-auto pr-2">
+                <div id="fin-content" class="flex-grow overflow-y-auto bg-gray-50 p-2 md:p-6">
                     </div>
             </div>`;
         
-        // Carrega Receitas por padrão
-        window.renderReceivablesList();
+        window.switchTab('rec');
     };
 
-    // --- 1. RECEITAS (COM PARCELAMENTO 1x-24x) ---
-    window.renderReceivablesList = function() {
+    window.switchTab = (tab) => {
+        // Atualiza estilo das abas
+        ['rec','exp','stk'].forEach(t => {
+            const btn = document.getElementById(`tab-${t}`);
+            if(t === tab) btn.className = `pb-3 border-b-2 ${t==='rec'?'border-indigo-600 text-indigo-700':t==='exp'?'border-red-500 text-red-600':'border-blue-500 text-blue-600'} font-bold text-sm whitespace-nowrap`;
+            else btn.className = "pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-600 font-bold text-sm whitespace-nowrap cursor-pointer";
+        });
+
+        if(tab === 'rec') renderReceivables();
+        if(tab === 'exp') renderExpenses();
+        if(tab === 'stk') renderStock();
+    };
+
+    // ==================================================================
+    // 1. RECEITAS (COM PARCELAMENTO E BAIXA DE ESTOQUE)
+    // ==================================================================
+    function renderReceivables() {
         const div = document.getElementById('fin-content');
         div.innerHTML = `
-            <div class="flex justify-between mb-4">
-                <p class="text-sm text-gray-500 mt-2">Gestão de procedimentos e parcelas.</p>
-                <button onclick="openRecModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold shadow flex items-center"><i class='bx bx-plus mr-1'></i> Nova Receita</button>
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-xs text-gray-500">Lançamentos de procedimentos e pagamentos.</p>
+                <button onclick="openRecModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-indigo-700 flex items-center"><i class='bx bx-plus mr-1'></i> Novo Serviço</button>
             </div>
-            <div id="rec-list" class="space-y-3"></div>
-        `;
+            <div id="rec-list" class="space-y-3"></div>`;
         
         const list = document.getElementById('rec-list');
-        const sorted = [...App.data.receivables].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-        if(sorted.length === 0) {
-            list.innerHTML = '<div class="text-center text-gray-400 py-10">Nenhuma receita lançada.</div>';
-            return;
-        }
+        const sorted = [...App.data.receivables].sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+        
+        if(!sorted.length) { list.innerHTML = '<p class="text-center text-gray-400 mt-10">Nenhuma receita lançada.</p>'; return; }
 
         sorted.forEach(r => {
             const isPaid = r.status === 'Recebido';
-            const badge = isPaid 
-                ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold uppercase">Recebido</span>` 
-                : `<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold uppercase">Aberto</span>`;
-            
-            const btnPay = isPaid 
-                ? '' 
-                : `<button onclick="settleTx('receivable','${r.id}')" class="ml-2 bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600 shadow">Baixar</button>`;
+            // Renderiza itens usados se houver
+            let itemsHtml = '';
+            if(r.itemsUsed && r.itemsUsed.length > 0) {
+                itemsHtml = `<div class="mt-2 pt-2 border-t border-dashed border-gray-200 text-xs text-gray-500">
+                    <span class="font-bold text-red-400">Baixa de Estoque:</span> ${r.itemsUsed.map(i => `${i.qty}x ${i.name}`).join(', ')}
+                </div>`;
+            }
 
             list.innerHTML += `
-                <div class="bg-white border border-gray-100 p-4 rounded-xl hover:shadow-md transition flex justify-between items-center group">
-                    <div>
-                        <div class="font-bold text-gray-800 text-lg">${r.patientName}</div>
-                        <div class="text-xs text-gray-500 flex items-center gap-2">
-                            <span class="bg-gray-100 px-2 rounded">${r.paymentMethod}</span>
-                            <span>${r.description}</span>
-                            <span class="text-indigo-500 font-semibold">• Venc: ${App.utils.formatDate(r.dueDate)}</span>
+                <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-gray-800 text-base">${r.patientName}</div>
+                            <div class="text-xs text-gray-500 mt-0.5">${r.description} <span class="text-indigo-500 font-medium">• ${r.paymentMethod}</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-gray-800 text-lg">${App.utils.formatCurrency(r.amount)}</div>
+                            <span class="text-[10px] px-2 py-0.5 rounded uppercase font-bold ${isPaid?'bg-green-100 text-green-700':'bg-yellow-100 text-yellow-700'}">${r.status}</span>
                         </div>
                     </div>
-                    <div class="text-right flex items-center">
-                        ${badge}
-                        <span class="font-bold text-gray-700 ml-3 text-lg">${App.utils.formatCurrency(r.amount)}</span>
-                        ${btnPay}
-                        <button onclick="delTx('finance/receivable','${r.id}')" class="ml-2 text-gray-300 hover:text-red-500 text-xl"><i class='bx bx-trash'></i></button>
+                    ${itemsHtml}
+                    <div class="mt-3 flex justify-end gap-2 border-t pt-2">
+                        ${!isPaid ? `<button onclick="settleTx('receivable','${r.id}')" class="text-xs bg-green-50 text-green-600 px-3 py-1.5 rounded font-bold hover:bg-green-100">Confirmar Recebimento</button>` : ''}
+                        <button onclick="delTx('finance/receivable','${r.id}')" class="text-gray-400 hover:text-red-500"><i class='bx bx-trash text-lg'></i></button>
                     </div>
                 </div>`;
         });
+    }
+
+    window.openRecModal = function() {
+        const patOpts = App.data.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        const stockOpts = App.data.stock.map(s => `<option value="${s.id}" data-name="${s.name}" data-unit="${s.unit}">${s.name} (${s.quantity} ${s.unit})</option>`).join('');
+
+        const html = `
+            <div class="grid md:grid-cols-2 gap-6 h-full text-sm">
+                <div class="space-y-3">
+                    <h4 class="font-bold text-indigo-800 border-b pb-1">1. Dados do Serviço</h4>
+                    <div><label class="font-bold text-gray-600">Paciente</label><select id="r-pat" class="w-full border p-2 rounded bg-gray-50">${patOpts}</select></div>
+                    <div><label class="font-bold text-gray-600">Descrição</label><input id="r-desc" class="w-full border p-2 rounded" placeholder="Ex: Implante Unitário"></div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="font-bold text-gray-600">Valor Total (R$)</label><input id="r-val" type="number" step="0.01" class="w-full border p-2 rounded"></div>
+                        <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="r-date" type="date" class="w-full border p-2 rounded"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2 bg-indigo-50 p-2 rounded border border-indigo-100">
+                        <div><label class="font-bold text-indigo-900">Pagamento</label><select id="r-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'rec-inst-area')"><option value="Pix">Pix</option><option value="Dinheiro">Dinheiro</option><option value="Cartão">Cartão Crédito</option><option value="Boleto">Boleto</option></select></div>
+                        <div id="rec-inst-area" class="hidden">
+                            <label class="font-bold text-indigo-900">Parcelas</label>
+                            <select id="r-parcels" class="w-full border p-2 rounded">
+                                ${Array.from({length: 24}, (_, i) => `<option value="${i+1}">${i+1}x</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col">
+                    <h4 class="font-bold text-blue-800 border-b pb-1 mb-2 flex justify-between items-center">
+                        <span>2. Material Gasto (Baixa)</span>
+                        <i class='bx bx-box'></i>
+                    </h4>
+                    <div class="flex gap-2 mb-2">
+                        <select id="r-stock-sel" class="flex-grow border p-1 rounded text-xs">${stockOpts}</select>
+                        <input id="r-stock-qty" type="number" placeholder="Qtd" class="w-16 border p-1 rounded text-xs">
+                        <button type="button" onclick="addStockItemToRec()" class="bg-blue-600 text-white px-2 rounded text-xs font-bold">+</button>
+                    </div>
+                    <div id="r-stock-list" class="flex-grow overflow-y-auto bg-white border rounded p-2 text-xs space-y-1 h-32">
+                        <p class="text-gray-400 italic text-center mt-4">Nenhum item selecionado.</p>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2">* Estes itens serão descontados do estoque ao salvar.</p>
+                </div>
+            </div>
+            
+            <button onclick="saveRec()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-indigo-700">Salvar Serviço e Baixar Estoque</button>
+        `;
+        App.utils.openModal("Novo Atendimento", html, "max-w-4xl");
+
+        // Lógica local para lista temporária de itens
+        window.tempItemsUsed = [];
+        
+        window.toggleInst = (val, id) => {
+            const el = document.getElementById(id);
+            if(el) el.classList.toggle('hidden', !['Cartão', 'Boleto'].includes(val));
+        };
+
+        window.addStockItemToRec = () => {
+            const sel = document.getElementById('r-stock-sel');
+            const qty = parseFloat(document.getElementById('r-stock-qty').value);
+            if(!qty || qty <= 0) return;
+            
+            const opt = sel.options[sel.selectedIndex];
+            window.tempItemsUsed.push({ id: sel.value, name: opt.dataset.name, qty: qty, unit: opt.dataset.unit });
+            renderTempItems('r-stock-list', window.tempItemsUsed);
+            document.getElementById('r-stock-qty').value = '';
+        };
+
+        window.renderTempItems = (containerId, list) => {
+            const el = document.getElementById(containerId);
+            el.innerHTML = list.map((i, idx) => `
+                <div class="flex justify-between items-center bg-gray-100 p-1 rounded">
+                    <span>${i.qty} ${i.unit} - ${i.name}</span>
+                    <button onclick="window.tempItemsUsed.splice(${idx},1); renderTempItems('${containerId}', window.tempItemsUsed)" class="text-red-500 font-bold px-1">&times;</button>
+                </div>`).join('') || '<p class="text-gray-400 italic text-center">Vazio.</p>';
+        };
+
+        window.saveRec = async () => {
+            const pid = document.getElementById('r-pat').value;
+            const pname = document.getElementById('r-pat').options[document.getElementById('r-pat').selectedIndex].text;
+            const desc = document.getElementById('r-desc').value;
+            const total = parseFloat(document.getElementById('r-val').value);
+            const method = document.getElementById('r-method').value;
+            
+            // Lógica de Parcelamento
+            let parcels = 1;
+            if(!document.getElementById('rec-inst-area').classList.contains('hidden')) {
+                parcels = parseInt(document.getElementById('r-parcels').value);
+            }
+            const valParcela = total / parcels;
+            const baseDate = new Date(document.getElementById('r-date').value);
+
+            // 1. Gera as Parcelas no Financeiro
+            for(let i=0; i < parcels; i++) {
+                let dueDate = new Date(baseDate);
+                dueDate.setMonth(dueDate.getMonth() + i);
+
+                const data = {
+                    patientId: pid,
+                    patientName: pname,
+                    description: parcels > 1 ? `${desc} (${i+1}/${parcels})` : desc,
+                    amount: valParcela,
+                    dueDate: dueDate.toISOString(),
+                    paymentMethod: method,
+                    status: 'Aberto',
+                    itemsUsed: (i === 0) ? window.tempItemsUsed : [] // Registra itens apenas na 1ª parcela pra não duplicar visualmente
+                };
+                
+                await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/receivable')).push(data);
+            }
+
+            // 2. Processa a Baixa de Estoque (Apenas uma vez)
+            if(window.tempItemsUsed.length > 0) {
+                for(let item of window.tempItemsUsed) {
+                    const ref = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${item.id}`));
+                    const snap = await ref.once('value');
+                    if(snap.exists()) {
+                        const currentQty = parseFloat(snap.val().quantity) || 0;
+                        await ref.update({ quantity: currentQty - item.qty });
+                    }
+                }
+            }
+
+            App.utils.closeModal();
+            alert("Sucesso! Financeiro gerado e estoque baixado.");
+        };
     };
 
-    // --- 2. DESPESAS (COM ENTRADA DE NOTA FISCAL) ---
-    window.renderExpensesList = function() {
+    // ==================================================================
+    // 2. DESPESAS (COM PARCELAMENTO E ENTRADA DE NOTA NO ESTOQUE)
+    // ==================================================================
+    function renderExpenses() {
         const div = document.getElementById('fin-content');
         div.innerHTML = `
-            <div class="flex justify-between mb-4">
-                <p class="text-sm text-gray-500 mt-2">Contas a pagar e fornecedores.</p>
-                <button onclick="openExpModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-bold shadow flex items-center"><i class='bx bx-plus mr-1'></i> Nova Despesa</button>
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-xs text-gray-500">Contas a pagar (Luz, Água, Fornecedores).</p>
+                <button onclick="openExpModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-red-700 flex items-center"><i class='bx bx-plus mr-1'></i> Nova Despesa</button>
             </div>
-            <div id="exp-list" class="space-y-3"></div>
-        `;
+            <div id="exp-list" class="space-y-3"></div>`;
         
         const list = document.getElementById('exp-list');
-        const sorted = [...App.data.expenses].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        const sorted = [...App.data.expenses].sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+        
+        if(!sorted.length) { list.innerHTML = '<p class="text-center text-gray-400 mt-10">Nenhuma despesa lançada.</p>'; return; }
 
         sorted.forEach(e => {
             const isPaid = e.status === 'Pago';
-            const badge = isPaid 
-                ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold uppercase">Pago</span>` 
-                : `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold uppercase">Aberto</span>`;
-            
-            const btnPay = isPaid 
-                ? '' 
-                : `<button onclick="settleTx('expenses','${e.id}')" class="ml-2 bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 shadow">Pagar</button>`;
+            // Itens comprados
+            let itemsHtml = '';
+            if(e.itemsPurchased && e.itemsPurchased.length > 0) {
+                itemsHtml = `<div class="mt-2 pt-2 border-t border-dashed border-gray-200 text-xs text-gray-500">
+                    <span class="font-bold text-green-700">Entrada de Estoque:</span> ${e.itemsPurchased.map(i => `${i.qty}x ${i.name}`).join(', ')}
+                </div>`;
+            }
 
             list.innerHTML += `
-                <div class="bg-white border border-gray-100 p-4 rounded-xl hover:shadow-md transition flex justify-between items-center border-l-4 border-l-red-400">
-                    <div>
-                        <div class="font-bold text-gray-800">${e.supplier} <span class="text-xs font-normal text-gray-400">(Ref: ${e.ref || 'S/N'})</span></div>
-                        <div class="text-xs text-gray-500">${e.description} • Venc: ${App.utils.formatDate(e.dueDate)}</div>
+                <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition border-l-4 border-l-red-400">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-gray-800 text-base">${e.supplier}</div>
+                            <div class="text-xs text-gray-500 mt-0.5">${e.description} <span class="text-gray-400">(Ref: ${e.ref || 'S/N'})</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-red-600 text-lg">${App.utils.formatCurrency(e.amount)}</div>
+                            <span class="text-[10px] px-2 py-0.5 rounded uppercase font-bold ${isPaid?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${e.status}</span>
+                        </div>
                     </div>
-                    <div class="text-right flex items-center">
-                        ${badge}
-                        <span class="font-bold text-red-600 ml-3 text-lg">${App.utils.formatCurrency(e.amount)}</span>
-                        ${btnPay}
-                        <button onclick="delTx('finance/expenses','${e.id}')" class="ml-2 text-gray-300 hover:text-red-500 text-xl"><i class='bx bx-trash'></i></button>
+                    ${itemsHtml}
+                    <div class="mt-3 flex justify-end gap-2 border-t pt-2">
+                        ${!isPaid ? `<button onclick="settleTx('expenses','${e.id}')" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded font-bold hover:bg-blue-100">Pagar Conta</button>` : ''}
+                        <button onclick="delTx('finance/expenses','${e.id}')" class="text-gray-400 hover:text-red-500"><i class='bx bx-trash text-lg'></i></button>
                     </div>
                 </div>`;
         });
-    };
-
-    // --- 3. ESTOQUE ---
-    window.renderStockList = function() {
-        const div = document.getElementById('fin-content');
-        div.innerHTML = `
-            <div class="flex justify-between mb-4">
-                <p class="text-sm text-gray-500 mt-2">Controle de materiais.</p>
-                <button onclick="openStockModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold shadow flex items-center"><i class='bx bx-plus mr-1'></i> Novo Item</button>
-            </div>
-            <table class="w-full text-left text-sm border rounded-lg overflow-hidden">
-                <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-                    <tr><th class="p-3">Item</th><th class="p-3">Qtd</th><th class="p-3">Categoria</th><th class="p-3 text-right">Ação</th></tr>
-                </thead>
-                <tbody id="stk-body" class="bg-white divide-y divide-gray-100"></tbody>
-            </table>
-        `;
-        const tb = document.getElementById('stk-body');
-        App.data.stock.forEach(i => {
-            tb.innerHTML += `
-                <tr class="hover:bg-gray-50">
-                    <td class="p-3 font-medium text-gray-800">${i.name}</td>
-                    <td class="p-3"><span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold text-xs">${i.quantity} ${i.unit}</span></td>
-                    <td class="p-3 text-gray-500 text-xs">${i.category}</td>
-                    <td class="p-3 text-right"><button onclick="delTx('stock','${i.id}')" class="text-red-400 hover:text-red-600"><i class='bx bx-trash'></i></button></td>
-                </tr>`;
-        });
-    };
-
-    // --- MODAIS DE LANÇAMENTO (LÓGICA COMPLEXA) ---
-    
-    window.openRecModal = function() {
-        const opts = App.data.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        const html = `
-            <form id="rec-form" class="grid gap-4 text-sm">
-                <div><label class="block font-bold mb-1">Paciente</label><select id="r-p" class="w-full border p-2 rounded bg-gray-50">${opts}</select></div>
-                <div><label class="block font-bold mb-1">Descrição do Serviço</label><input id="r-d" class="w-full border p-2 rounded" required placeholder="Ex: Implante Unitário"></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block font-bold mb-1">Valor Total (R$)</label><input id="r-v" type="number" step="0.01" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block font-bold mb-1">1º Vencimento</label><input id="r-dt" type="date" class="w-full border p-2 rounded" required></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded border">
-                    <div><label class="block font-bold mb-1">Forma</label><select id="r-py" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'rec-inst-box')"><option value="Pix">Pix</option><option value="Cartão">Cartão Crédito</option><option value="Dinheiro">Dinheiro</option></select></div>
-                    <div id="rec-inst-box" class="hidden">
-                        <label class="block font-bold mb-1">Parcelas</label>
-                        <select id="r-inst" class="w-full border p-2 rounded">${Array.from({length:24},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join('')}</select>
-                    </div>
-                </div>
-                <button class="w-full py-3 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700 mt-2">Lançar Receita</button>
-            </form>`;
-        App.utils.openModal("Novo Serviço", html);
-
-        document.getElementById('rec-form').onsubmit = (e) => {
-            e.preventDefault();
-            const parcels = document.getElementById('rec-inst-box').classList.contains('hidden') ? 1 : parseInt(document.getElementById('r-inst').value);
-            const total = parseFloat(document.getElementById('r-v').value);
-            const baseDate = new Date(document.getElementById('r-dt').value);
-            const pid = document.getElementById('r-p').value;
-            const pname = App.data.patients.find(x => x.id === pid).name;
-            const desc = document.getElementById('r-d').value;
-            const method = document.getElementById('r-py').value;
-
-            for(let i=0; i<parcels; i++) {
-                let d = new Date(baseDate); d.setMonth(d.getMonth() + i);
-                App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/receivable')).push({
-                    patientId: pid, patientName: pname, description: `${desc} (${i+1}/${parcels})`,
-                    amount: total/parcels, status: 'Aberto', dueDate: d.toISOString(), paymentMethod: method
-                });
-            }
-            App.utils.closeModal();
-        };
-    };
+    }
 
     window.openExpModal = function() {
         const html = `
-            <form id="exp-form" class="grid gap-4 text-sm">
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block font-bold mb-1">Fornecedor</label><input id="e-s" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block font-bold mb-1">Nota Fiscal</label><input id="e-nf" class="w-full border p-2 rounded"></div>
-                </div>
-                <div><label class="block font-bold mb-1">Descrição</label><input id="e-d" class="w-full border p-2 rounded" required></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block font-bold mb-1">Valor Total</label><input id="e-v" type="number" step="0.01" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block font-bold mb-1">1º Vencimento</label><input id="e-dt" type="date" class="w-full border p-2 rounded" required></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded border">
-                    <div><label class="block font-bold mb-1">Forma</label><select id="e-py" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'exp-inst-box')"><option value="Boleto">Boleto</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select></div>
-                    <div id="exp-inst-box" class="hidden">
-                        <label class="block font-bold mb-1">Parcelas</label>
-                        <select id="e-inst" class="w-full border p-2 rounded">${Array.from({length:24},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join('')}</select>
+            <div class="grid md:grid-cols-2 gap-6 h-full text-sm">
+                <div class="space-y-3">
+                    <h4 class="font-bold text-red-800 border-b pb-1">1. Dados da Conta</h4>
+                    <div><label class="font-bold text-gray-600">Fornecedor</label><input id="e-sup" class="w-full border p-2 rounded" placeholder="Ex: CEMIG ou Dental Cremer"></div>
+                    <div><label class="font-bold text-gray-600">Descrição</label><input id="e-desc" class="w-full border p-2 rounded" placeholder="Ex: Conta de Luz ou Material Mensal"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="font-bold text-gray-600">Valor Total (R$)</label><input id="e-val" type="number" step="0.01" class="w-full border p-2 rounded"></div>
+                        <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="e-date" type="date" class="w-full border p-2 rounded"></div>
+                    </div>
+                    <div><label class="font-bold text-gray-600">Ref/NF</label><input id="e-nf" class="w-full border p-2 rounded"></div>
+                    
+                    <div class="grid grid-cols-2 gap-2 bg-red-50 p-2 rounded border border-red-100">
+                        <div><label class="font-bold text-red-900">Pagamento</label><select id="e-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'exp-inst-area')"><option value="Boleto">Boleto</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select></div>
+                        <div id="exp-inst-area" class="hidden">
+                            <label class="font-bold text-red-900">Parcelas</label>
+                            <select id="e-parcels" class="w-full border p-2 rounded">
+                                ${Array.from({length: 24}, (_, i) => `<option value="${i+1}">${i+1}x</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <button class="w-full py-3 bg-red-600 text-white rounded font-bold hover:bg-red-700 mt-2">Lançar Despesa</button>
-            </form>`;
-        App.utils.openModal("Nova Despesa", html);
-        
-        document.getElementById('exp-form').onsubmit = (e) => {
-            e.preventDefault();
-            const parcels = document.getElementById('exp-inst-box').classList.contains('hidden') ? 1 : parseInt(document.getElementById('e-inst').value);
-            const total = parseFloat(document.getElementById('e-v').value);
-            const baseDate = new Date(document.getElementById('e-dt').value);
+
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col">
+                    <h4 class="font-bold text-green-800 border-b pb-1 mb-2 flex justify-between items-center">
+                        <span>2. Itens Comprados (Entrada)</span>
+                        <i class='bx bx-cart-add'></i>
+                    </h4>
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                        <input id="e-item-name" placeholder="Nome do Item" class="col-span-2 border p-1 rounded text-xs">
+                        <input id="e-item-unit" placeholder="Un (cx)" class="border p-1 rounded text-xs">
+                    </div>
+                    <div class="flex gap-2 mb-2">
+                        <input id="e-item-qty" type="number" placeholder="Qtd" class="flex-grow border p-1 rounded text-xs">
+                        <select id="e-item-cat" class="border p-1 rounded text-xs"><option>Consumo</option><option>Venda</option></select>
+                        <button type="button" onclick="addStockItemToExp()" class="bg-green-600 text-white px-3 rounded text-xs font-bold">Add</button>
+                    </div>
+                    <div id="e-stock-list" class="flex-grow overflow-y-auto bg-white border rounded p-2 text-xs space-y-1 h-24">
+                        <p class="text-gray-400 italic text-center mt-4">Nenhum item adicionado.</p>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2">* Deixe vazio se for conta de consumo (luz, água).</p>
+                </div>
+            </div>
             
-            for(let i=0; i<parcels; i++) {
-                let d = new Date(baseDate); d.setMonth(d.getMonth() + i);
-                App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/expenses')).push({
-                    supplier: document.getElementById('e-s').value, ref: document.getElementById('e-nf').value,
-                    description: `${document.getElementById('e-d').value} (${i+1}/${parcels})`,
-                    amount: total/parcels, status: 'Aberto', dueDate: d.toISOString(), paymentMethod: document.getElementById('e-py').value
-                });
+            <button onclick="saveExp()" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-red-700">Salvar Despesa e Atualizar Estoque</button>
+        `;
+        App.utils.openModal("Nova Despesa / Entrada", html, "max-w-4xl");
+
+        window.tempItemsPurchased = [];
+
+        window.addStockItemToExp = () => {
+            const name = document.getElementById('e-item-name').value;
+            const qty = parseFloat(document.getElementById('e-item-qty').value);
+            const unit = document.getElementById('e-item-unit').value || 'un';
+            const cat = document.getElementById('e-item-cat').value;
+
+            if(!name || !qty) return;
+            window.tempItemsPurchased.push({ name, qty, unit, category: cat });
+            renderTempItems('e-stock-list', window.tempItemsPurchased);
+            
+            document.getElementById('e-item-name').value = '';
+            document.getElementById('e-item-qty').value = '';
+        };
+
+        window.saveExp = async () => {
+            const supplier = document.getElementById('e-sup').value;
+            const desc = document.getElementById('e-desc').value;
+            const total = parseFloat(document.getElementById('e-val').value);
+            const method = document.getElementById('e-method').value;
+            const refDoc = document.getElementById('e-nf').value;
+
+            // Lógica de Parcelamento
+            let parcels = 1;
+            if(!document.getElementById('exp-inst-area').classList.contains('hidden')) {
+                parcels = parseInt(document.getElementById('e-parcels').value);
             }
+            const valParcela = total / parcels;
+            const baseDate = new Date(document.getElementById('e-date').value);
+
+            // 1. Gera as Parcelas de Despesa
+            for(let i=0; i < parcels; i++) {
+                let dueDate = new Date(baseDate);
+                dueDate.setMonth(dueDate.getMonth() + i);
+
+                const data = {
+                    supplier: supplier,
+                    description: parcels > 1 ? `${desc} (${i+1}/${parcels})` : desc,
+                    amount: valParcela,
+                    dueDate: dueDate.toISOString(),
+                    ref: refDoc,
+                    paymentMethod: method,
+                    status: 'Aberto',
+                    itemsPurchased: (i === 0) ? window.tempItemsPurchased : []
+                };
+                
+                await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/expenses')).push(data);
+            }
+
+            // 2. Processa Entrada de Estoque (Lógica Inteligente)
+            if(window.tempItemsPurchased.length > 0) {
+                const stockRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'stock'));
+                const snapshot = await stockRef.once('value');
+                const currentStock = [];
+                if(snapshot.exists()) snapshot.forEach(c => currentStock.push({ ...c.val(), key: c.key }));
+
+                for(let newItem of window.tempItemsPurchased) {
+                    // Tenta encontrar item pelo nome (case insensitive)
+                    const exist = currentStock.find(s => s.name.toLowerCase() === newItem.name.toLowerCase());
+                    
+                    if(exist) {
+                        // Atualiza existente
+                        await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${exist.key}`)).update({
+                            quantity: parseFloat(exist.quantity) + newItem.qty
+                        });
+                    } else {
+                        // Cria novo
+                        await stockRef.push({
+                            name: newItem.name, quantity: newItem.qty, unit: newItem.unit, category: newItem.category
+                        });
+                    }
+                }
+            }
+
             App.utils.closeModal();
+            alert("Sucesso! Despesa lançada e itens adicionados ao estoque!");
         };
     };
 
-    window.openStockModal = function() {
-        const html = `<form id="stk-form" class="grid gap-3"><input id="s-n" placeholder="Nome do Item" class="border p-2 rounded w-full" required><div class="grid grid-cols-2 gap-3"><input id="s-q" type="number" placeholder="Qtd" class="border p-2 rounded"><input id="s-u" placeholder="Unid (cx, un)" class="border p-2 rounded"></div><select id="s-c" class="border p-2 rounded w-full"><option>Consumo</option><option>Instrumental</option></select><button class="bg-blue-600 text-white w-full py-2 rounded font-bold">Salvar</button></form>`;
-        App.utils.openModal("Novo Item de Estoque", html);
-        document.getElementById('stk-form').onsubmit = (e) => {
-            e.preventDefault();
-            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'stock')).push({
-                name: document.getElementById('s-n').value, quantity: document.getElementById('s-q').value,
-                unit: document.getElementById('s-u').value, category: document.getElementById('s-c').value
-            });
-            App.utils.closeModal();
+    // ==================================================================
+    // 3. ESTOQUE (VISUALIZAÇÃO EM GRID)
+    // ==================================================================
+    function renderStock() {
+        const div = document.getElementById('fin-content');
+        div.innerHTML = `<div id="stk-grid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>`;
+        const grid = document.getElementById('stk-grid');
+        
+        if(!App.data.stock.length) { grid.innerHTML = '<p class="col-span-4 text-center text-gray-400 mt-10">Estoque vazio.</p>'; return; }
+
+        App.data.stock.forEach(i => {
+            grid.innerHTML += `
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="font-bold text-gray-700 truncate" title="${i.name}">${i.name}</div>
+                        <div class="text-xs text-gray-400 uppercase">${i.category}</div>
+                    </div>
+                    <div class="mt-2 flex justify-between items-end">
+                        <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold text-sm">${i.quantity} ${i.unit}</span>
+                        <button onclick="delTx('stock','${i.id}')" class="text-red-300 hover:text-red-500"><i class='bx bx-trash'></i></button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    // --- UTILS ---
+    window.delTx = (path, id) => { if(confirm("Excluir registro?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `${path}/${id}`)).remove(); };
+    window.settleTx = (type, id) => {
+        if(confirm("Confirmar transação?")) {
+            const up = type==='receivable' ? { status:'Recebido', receivedDate: new Date().toISOString() } : { status:'Pago', paidDate: new Date().toISOString() };
+            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `finance/${type}/${id}`)).update(up);
         }
     };
 
-    // Utils
-    window.toggleInst = (val, id) => document.getElementById(id).classList.toggle('hidden', !['Cartão', 'Boleto'].includes(val));
-    window.delTx = (path, id) => { if(confirm("Excluir?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `${path}/${id}`)).remove(); };
-    window.settleTx = (type, id) => {
-        if(confirm("Confirmar baixa?")) {
-            const upd = { status: type==='receivable'?'Recebido':'Pago' };
-            if(type==='receivable') upd.receivedDate = new Date().toISOString(); else upd.paidDate = new Date().toISOString();
-            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `finance/${type}/${id}`)).update(upd);
-        }
-    };
 })();
