@@ -1,10 +1,11 @@
 // ==================================================================
-// MÓDULO PORTAL DO PACIENTE (VERSÃO FINAL COM RODAPÉ & FILTRO IA)
+// MÓDULO PORTAL DO PACIENTE (COM IA INTEGRADA AO CÉREBRO)
 // ==================================================================
 (function() {
     var config = window.AppConfig;
     var appId = config.APP_ID;
     var db, auth, currentUser, myProfile, myDentistUid, selectedFile;
+    var aiDirectives = null; // Variável para guardar o Cérebro da IA
 
     function init() {
         if (!firebase.apps.length) firebase.initializeApp(config.firebaseConfig);
@@ -65,6 +66,13 @@
                                 myProfile = { ...patients[pid], id: pid };
                                 myDentistUid = dentistSnap.key;
                                 found = true;
+                                
+                                // --- INTEGRAÇÃO: Carrega o Cérebro da IA do Dentista ---
+                                db.ref('artifacts/' + appId + '/users/' + myDentistUid + '/aiConfig/directives').on('value', function(brainSnap) {
+                                    if(brainSnap.exists()) {
+                                        aiDirectives = brainSnap.val().promptDirectives;
+                                    }
+                                });
                             }
                         }
                     }
@@ -82,7 +90,6 @@
         document.getElementById('p-treatment').textContent = myProfile.treatmentType;
         document.getElementById('p-status').textContent = 'Ativo';
         
-        // INJEÇÃO DO RODAPÉ (Solicitado)
         var footer = document.querySelector('#patient-app footer');
         if(!footer) {
              footer = document.createElement('footer');
@@ -104,9 +111,7 @@
             if (snap.exists()) {
                 snap.forEach(function(c) {
                     var msg = c.val();
-                    
-                    // SEGURANÇA: NÃO MOSTRAR NOTA INTERNA PARA O PACIENTE
-                    if (msg.author === 'Nota Interna') return;
+                    if (msg.author === 'Nota Interna') return; // Segurança
 
                     var isMe = msg.author === 'Paciente';
                     var align = isMe ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-gray-100 text-gray-800 border';
@@ -157,6 +162,7 @@
             try { mediaData = await window.uploadToCloudinary(selectedFile); } catch (e) { alert("Erro ao enviar imagem."); return; }
         }
 
+        // Salva mensagem do paciente
         db.ref('artifacts/' + appId + '/patients/' + myProfile.id + '/journal').push({
             text: text || (mediaData ? "Anexo" : ""),
             author: 'Paciente',
@@ -168,13 +174,34 @@
         selectedFile = null;
         document.getElementById('img-preview-area').classList.add('hidden');
 
+        // LÓGICA DA IA (INTEGRADA COM DIRETRIZES)
         if (window.callGeminiAPI && text) {
-            var context = `
-                ATUE COMO: Recepcionista Virtual da Clínica.
-                PACIENTE: ${myProfile.name}.
-                INSTRUÇÃO: Responda de forma curta, educada e acolhedora. Não dê diagnósticos médicos.
-                MENSAGEM DO PACIENTE: "${text}"
-            `;
+            var context = "";
+            
+            if (aiDirectives) {
+                // Se o dentista configurou o Cérebro, usamos ele no MODO 1
+                context = `
+                    ${aiDirectives}
+                    
+                    --- INSTRUÇÃO DO SISTEMA ---
+                    ATENÇÃO: O interlocutor agora é o PACIENTE.
+                    ATIVE O "MODO 1: SECRETÁRIA" e ignore instruções do Modo 2.
+                    Seja curta, educada e siga as regras de segurança.
+                    
+                    DADOS:
+                    Paciente: ${myProfile.name}.
+                    Mensagem: "${text}"
+                `;
+            } else {
+                // Fallback (Caso não tenha configurado nada ainda)
+                context = `
+                    ATUE COMO: Recepcionista Virtual da Clínica.
+                    PACIENTE: ${myProfile.name}.
+                    INSTRUÇÃO: Responda de forma curta, educada e acolhedora. Não dê diagnósticos médicos.
+                    MENSAGEM DO PACIENTE: "${text}"
+                `;
+            }
+
             var reply = await window.callGeminiAPI(context, text);
             db.ref('artifacts/' + appId + '/patients/' + myProfile.id + '/journal').push({
                 text: reply, author: 'IA (Auto)', timestamp: new Date().toISOString()
