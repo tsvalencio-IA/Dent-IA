@@ -15,15 +15,17 @@
                     <button onclick="switchTab('stk')" id="tab-stk" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-blue-500 font-bold text-sm whitespace-nowrap transition">📦 Estoque Atual</button>
                 </div>
 
-                <div id="fin-content" class="flex-grow overflow-y-auto bg-gray-50 p-2 md:p-6">
-                    </div>
+                <div id="fin-content" class="flex-grow overflow-y-auto bg-gray-50 p-2 md:p-6"></div>
+                
+                <footer class="text-center py-4 text-xs text-gray-400 bg-gray-50 shrink-0">
+                    Desenvolvido com 🤖 por <strong>thIAguinho Soluções</strong>
+                </footer>
             </div>`;
         
         window.switchTab('rec');
     };
 
     window.switchTab = (tab) => {
-        // Atualiza estilo das abas
         ['rec','exp','stk'].forEach(t => {
             const btn = document.getElementById(`tab-${t}`);
             if(t === tab) btn.className = `pb-3 border-b-2 ${t==='rec'?'border-indigo-600 text-indigo-700':t==='exp'?'border-red-500 text-red-600':'border-blue-500 text-blue-600'} font-bold text-sm whitespace-nowrap`;
@@ -54,7 +56,6 @@
 
         sorted.forEach(r => {
             const isPaid = r.status === 'Recebido';
-            // Renderiza itens usados se houver
             let itemsHtml = '';
             if(r.itemsUsed && r.itemsUsed.length > 0) {
                 itemsHtml = `<div class="mt-2 pt-2 border-t border-dashed border-gray-200 text-xs text-gray-500">
@@ -93,12 +94,10 @@
                     <h4 class="font-bold text-indigo-800 border-b pb-1">1. Dados do Serviço</h4>
                     <div><label class="font-bold text-gray-600">Paciente</label><select id="r-pat" class="w-full border p-2 rounded bg-gray-50">${patOpts}</select></div>
                     <div><label class="font-bold text-gray-600">Descrição</label><input id="r-desc" class="w-full border p-2 rounded" placeholder="Ex: Implante Unitário"></div>
-                    
                     <div class="grid grid-cols-2 gap-2">
                         <div><label class="font-bold text-gray-600">Valor Total (R$)</label><input id="r-val" type="number" step="0.01" class="w-full border p-2 rounded"></div>
                         <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="r-date" type="date" class="w-full border p-2 rounded"></div>
                     </div>
-                    
                     <div class="grid grid-cols-2 gap-2 bg-indigo-50 p-2 rounded border border-indigo-100">
                         <div><label class="font-bold text-indigo-900">Pagamento</label><select id="r-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'rec-inst-area')"><option value="Pix">Pix</option><option value="Dinheiro">Dinheiro</option><option value="Cartão">Cartão Crédito</option><option value="Boleto">Boleto</option></select></div>
                         <div id="rec-inst-area" class="hidden">
@@ -109,7 +108,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col">
                     <h4 class="font-bold text-blue-800 border-b pb-1 mb-2 flex justify-between items-center">
                         <span>2. Material Gasto (Baixa)</span>
@@ -123,15 +121,13 @@
                     <div id="r-stock-list" class="flex-grow overflow-y-auto bg-white border rounded p-2 text-xs space-y-1 h-32">
                         <p class="text-gray-400 italic text-center mt-4">Nenhum item selecionado.</p>
                     </div>
-                    <p class="text-[10px] text-gray-500 mt-2">* Estes itens serão descontados do estoque ao salvar.</p>
+                    <p class="text-[10px] text-gray-500 mt-2">* Estes itens serão descontados do estoque.</p>
                 </div>
             </div>
-            
             <button onclick="saveRec()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-indigo-700">Salvar Serviço e Baixar Estoque</button>
         `;
         App.utils.openModal("Novo Atendimento", html, "max-w-4xl");
 
-        // Lógica local para lista temporária de itens
         window.tempItemsUsed = [];
         
         window.toggleInst = (val, id) => {
@@ -143,7 +139,6 @@
             const sel = document.getElementById('r-stock-sel');
             const qty = parseFloat(document.getElementById('r-stock-qty').value);
             if(!qty || qty <= 0) return;
-            
             const opt = sel.options[sel.selectedIndex];
             window.tempItemsUsed.push({ id: sel.value, name: opt.dataset.name, qty: qty, unit: opt.dataset.unit });
             renderTempItems('r-stock-list', window.tempItemsUsed);
@@ -166,7 +161,6 @@
             const total = parseFloat(document.getElementById('r-val').value);
             const method = document.getElementById('r-method').value;
             
-            // Lógica de Parcelamento
             let parcels = 1;
             if(!document.getElementById('rec-inst-area').classList.contains('hidden')) {
                 parcels = parseInt(document.getElementById('r-parcels').value);
@@ -174,7 +168,6 @@
             const valParcela = total / parcels;
             const baseDate = new Date(document.getElementById('r-date').value);
 
-            // 1. Gera as Parcelas no Financeiro
             for(let i=0; i < parcels; i++) {
                 let dueDate = new Date(baseDate);
                 dueDate.setMonth(dueDate.getMonth() + i);
@@ -187,13 +180,11 @@
                     dueDate: dueDate.toISOString(),
                     paymentMethod: method,
                     status: 'Aberto',
-                    itemsUsed: (i === 0) ? window.tempItemsUsed : [] // Registra itens apenas na 1ª parcela pra não duplicar visualmente
+                    itemsUsed: (i === 0) ? window.tempItemsUsed : []
                 };
-                
                 await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/receivable')).push(data);
             }
 
-            // 2. Processa a Baixa de Estoque (Apenas uma vez)
             if(window.tempItemsUsed.length > 0) {
                 for(let item of window.tempItemsUsed) {
                     const ref = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${item.id}`));
@@ -229,7 +220,6 @@
 
         sorted.forEach(e => {
             const isPaid = e.status === 'Pago';
-            // Itens comprados
             let itemsHtml = '';
             if(e.itemsPurchased && e.itemsPurchased.length > 0) {
                 itemsHtml = `<div class="mt-2 pt-2 border-t border-dashed border-gray-200 text-xs text-gray-500">
@@ -270,7 +260,6 @@
                         <div><label class="font-bold text-gray-600">1º Vencimento</label><input id="e-date" type="date" class="w-full border p-2 rounded"></div>
                     </div>
                     <div><label class="font-bold text-gray-600">Ref/NF</label><input id="e-nf" class="w-full border p-2 rounded"></div>
-                    
                     <div class="grid grid-cols-2 gap-2 bg-red-50 p-2 rounded border border-red-100">
                         <div><label class="font-bold text-red-900">Pagamento</label><select id="e-method" class="w-full border p-2 rounded" onchange="toggleInst(this.value, 'exp-inst-area')"><option value="Boleto">Boleto</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option></select></div>
                         <div id="exp-inst-area" class="hidden">
@@ -281,7 +270,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col">
                     <h4 class="font-bold text-green-800 border-b pb-1 mb-2 flex justify-between items-center">
                         <span>2. Itens Comprados (Entrada)</span>
@@ -302,7 +290,6 @@
                     <p class="text-[10px] text-gray-500 mt-2">* Deixe vazio se for conta de consumo (luz, água).</p>
                 </div>
             </div>
-            
             <button onclick="saveExp()" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold mt-4 shadow hover:bg-red-700">Salvar Despesa e Atualizar Estoque</button>
         `;
         App.utils.openModal("Nova Despesa / Entrada", html, "max-w-4xl");
@@ -314,11 +301,9 @@
             const qty = parseFloat(document.getElementById('e-item-qty').value);
             const unit = document.getElementById('e-item-unit').value || 'un';
             const cat = document.getElementById('e-item-cat').value;
-
             if(!name || !qty) return;
             window.tempItemsPurchased.push({ name, qty, unit, category: cat });
             renderTempItems('e-stock-list', window.tempItemsPurchased);
-            
             document.getElementById('e-item-name').value = '';
             document.getElementById('e-item-qty').value = '';
         };
@@ -330,7 +315,6 @@
             const method = document.getElementById('e-method').value;
             const refDoc = document.getElementById('e-nf').value;
 
-            // Lógica de Parcelamento
             let parcels = 1;
             if(!document.getElementById('exp-inst-area').classList.contains('hidden')) {
                 parcels = parseInt(document.getElementById('e-parcels').value);
@@ -338,7 +322,6 @@
             const valParcela = total / parcels;
             const baseDate = new Date(document.getElementById('e-date').value);
 
-            // 1. Gera as Parcelas de Despesa
             for(let i=0; i < parcels; i++) {
                 let dueDate = new Date(baseDate);
                 dueDate.setMonth(dueDate.getMonth() + i);
@@ -353,11 +336,9 @@
                     status: 'Aberto',
                     itemsPurchased: (i === 0) ? window.tempItemsPurchased : []
                 };
-                
                 await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/expenses')).push(data);
             }
 
-            // 2. Processa Entrada de Estoque (Lógica Inteligente)
             if(window.tempItemsPurchased.length > 0) {
                 const stockRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'stock'));
                 const snapshot = await stockRef.once('value');
@@ -365,16 +346,12 @@
                 if(snapshot.exists()) snapshot.forEach(c => currentStock.push({ ...c.val(), key: c.key }));
 
                 for(let newItem of window.tempItemsPurchased) {
-                    // Tenta encontrar item pelo nome (case insensitive)
                     const exist = currentStock.find(s => s.name.toLowerCase() === newItem.name.toLowerCase());
-                    
                     if(exist) {
-                        // Atualiza existente
                         await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `stock/${exist.key}`)).update({
                             quantity: parseFloat(exist.quantity) + newItem.qty
                         });
                     } else {
-                        // Cria novo
                         await stockRef.push({
                             name: newItem.name, quantity: newItem.qty, unit: newItem.unit, category: newItem.category
                         });
@@ -412,7 +389,6 @@
         });
     }
 
-    // --- UTILS ---
     window.delTx = (path, id) => { if(confirm("Excluir registro?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `${path}/${id}`)).remove(); };
     window.settleTx = (type, id) => {
         if(confirm("Confirmar transação?")) {
