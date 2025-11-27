@@ -1,41 +1,25 @@
-// ==================================================================
-// MÓDULO DE PACIENTES E PRONTUÁRIO
-// ==================================================================
 (function() {
     const App = window.DentistaApp;
     let currentChatRef = null;
 
-    // Função Principal de Renderização
     window.renderPatientManager = function() {
-        const container = document.getElementById('main-content');
-        container.innerHTML = `
+        document.getElementById('main-content').innerHTML = `
             <div class="p-8 bg-white shadow-lg rounded-2xl">
                 <div class="flex justify-between mb-6">
                     <h2 class="text-2xl font-bold text-indigo-800">Pacientes</h2>
                     <button onclick="openPatientModal()" class="bg-indigo-600 text-white px-4 py-2 rounded shadow">Novo Paciente</button>
                 </div>
-                <div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-100 text-gray-600"><tr><th class="p-3">Nome</th><th class="p-3">Contato</th><th class="p-3 text-right">Ações</th></tr></thead><tbody id="patient-list-body"></tbody></table></div>
+                <div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-100"><tr><th class="p-3">Nome</th><th class="p-3">Contato</th><th class="p-3 text-right">Ações</th></tr></thead><tbody id="patient-list"></tbody></table></div>
                 <footer class="text-center py-4 text-xs text-gray-400 mt-auto">Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong></footer>
             </div>`;
-        
-        const tbody = document.getElementById('patient-list-body');
-        if(App.data.patients.length > 0) {
+        const tbody = document.getElementById('patient-list');
+        if(App.data.patients.length) {
             App.data.patients.forEach(p => {
-                tbody.innerHTML += `
-                    <tr class="border-b hover:bg-gray-50">
-                        <td class="p-3 font-medium">${p.name}<br><span class="text-xs text-gray-400">${p.treatmentType}</span></td>
-                        <td class="p-3 text-sm">${p.email || '-'}<br>${p.phone || '-'}</td>
-                        <td class="p-3 text-right flex gap-2 justify-end">
-                            <button onclick="openJournal('${p.id}')" class="text-cyan-600 hover:bg-cyan-100 p-2 rounded" title="Prontuário"><i class='bx bx-file text-xl'></i></button>
-                            <button onclick="openPatientModal('${p.id}')" class="text-blue-600 hover:bg-blue-100 p-2 rounded" title="Editar"><i class='bx bx-edit text-xl'></i></button>
-                            <button onclick="deletePatient('${p.id}')" class="text-red-500 hover:bg-red-100 p-2 rounded" title="Excluir"><i class='bx bx-trash text-xl'></i></button>
-                        </td>
-                    </tr>`;
+                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-3 font-medium">${p.name}<br><span class="text-xs text-gray-500">${p.treatmentType}</span></td><td class="p-3 text-sm">${p.email||'-'}<br>${p.phone||'-'}</td><td class="p-3 text-right flex justify-end gap-2"><button onclick="openRecModal('${p.id}')" class="text-green-600 p-2" title="Cobrar"><i class='bx bx-money'></i></button><button onclick="openJournal('${p.id}')" class="text-cyan-600 p-2" title="Prontuário"><i class='bx bx-file'></i></button><button onclick="openPatientModal('${p.id}')" class="text-blue-600 p-2" title="Editar"><i class='bx bx-edit'></i></button><button onclick="delPat('${p.id}')" class="text-red-500 p-2"><i class='bx bx-trash'></i></button></td></tr>`;
             });
-        } else { tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Nenhum paciente cadastrado.</td></tr>'; }
+        } else tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Nenhum paciente.</td></tr>';
     };
 
-    // --- CRUD PACIENTE ---
     window.openPatientModal = function(pid = null) {
         const p = pid ? App.data.patients.find(x => x.id === pid) : null;
         const html = `
@@ -44,130 +28,79 @@
                 <div class="col-span-2"><label class="font-bold">Nome</label><input id="p-name" class="w-full border p-2 rounded" value="${p?p.name:''}" required></div>
                 <div><label class="font-bold">Email</label><input id="p-email" class="w-full border p-2 rounded" value="${p?p.email:''}"></div>
                 <div><label class="font-bold">Telefone</label><input id="p-phone" class="w-full border p-2 rounded" value="${p?p.phone:''}"></div>
-                <div><label class="font-bold">CPF</label><input id="p-cpf" class="w-full border p-2 rounded" value="${p?p.cpf:''}"></div>
+                <div class="col-span-2"><label class="font-bold">Endereço</label><input id="p-addr" class="w-full border p-2 rounded" value="${p?p.address:''}"></div>
                 <div><label class="font-bold">Tratamento</label><select id="p-type" class="w-full border p-2 rounded"><option>Geral</option><option>Ortodontia</option><option>Implante</option></select></div>
-                <div class="col-span-2"><label class="font-bold">Endereço</label><input id="p-address" class="w-full border p-2 rounded" value="${p?p.address:''}"></div>
-                <div class="col-span-2"><label class="font-bold">Meta Clínica</label><textarea id="p-goal" class="w-full border p-2 rounded" rows="2">${p?p.treatmentGoal:''}</textarea></div>
-                <button class="col-span-2 bg-green-600 text-white py-2 rounded font-bold">Salvar Ficha</button>
+                <button class="col-span-2 bg-green-600 text-white py-2 rounded font-bold mt-2">Salvar</button>
             </form>`;
-        
-        App.utils.openModal(p ? 'Editar Paciente' : 'Novo Paciente', html, 'max-w-xl');
-        
+        App.utils.openModal(p?'Editar':'Novo', html);
         document.getElementById('form-pat').onsubmit = (e) => {
             e.preventDefault();
-            const data = {
-                name: document.getElementById('p-name').value,
-                email: document.getElementById('p-email').value,
-                phone: document.getElementById('p-phone').value,
-                cpf: document.getElementById('p-cpf').value,
-                address: document.getElementById('p-address').value,
-                treatmentType: document.getElementById('p-type').value,
-                treatmentGoal: document.getElementById('p-goal').value
-            };
+            const d = { name: document.getElementById('p-name').value, email: document.getElementById('p-email').value, phone: document.getElementById('p-phone').value, address: document.getElementById('p-addr').value, treatmentType: document.getElementById('p-type').value };
             const id = document.getElementById('p-id').value;
-            if(id) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients/'+id)).update(data);
-            else App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients')).push({...data, createdAt: new Date().toISOString()});
+            if(id) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients/'+id)).update(d);
+            else App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients')).push({...d, createdAt: new Date().toISOString()});
             App.utils.closeModal();
         };
     };
 
-    window.deletePatient = function(id) {
-        if(confirm("Excluir paciente?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients/'+id)).remove();
-    };
-
-    // --- PRONTUÁRIO E CHAT ---
     window.openJournal = function(id) {
         if(currentChatRef) currentChatRef.off();
         const p = App.data.patients.find(x => x.id === id);
-        
         const html = `
-            <div class="bg-indigo-50 p-4 rounded-xl mb-4 text-sm flex justify-between">
-                <div><h3 class="font-bold text-indigo-900">${p.name}</h3><p>${p.email || ''} | ${p.phone || ''}</p></div>
-                <span class="bg-white px-2 py-1 rounded text-xs font-bold text-indigo-600 shadow-sm">${p.treatmentType}</span>
-            </div>
+            <div class="bg-indigo-50 p-3 rounded mb-3 flex justify-between text-sm"><div><h3 class="font-bold">${p.name}</h3></div><span>${p.treatmentType}</span></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[450px]">
-                <div class="border p-3 rounded-xl bg-white flex flex-col"><h4 class="font-bold text-xs text-gray-500 mb-2">FINANCEIRO</h4><div id="journal-fin" class="flex-grow overflow-y-auto text-sm space-y-2"></div></div>
-                <div class="border p-3 rounded-xl bg-white flex flex-col"><h4 class="font-bold text-xs text-gray-500 mb-2">CHAT</h4>
-                    <div id="chat-area" class="flex-grow overflow-y-auto p-2 bg-gray-50 rounded mb-2"></div>
-                    <div class="flex gap-2">
-                        <input id="chat-msg" class="flex-grow border p-2 rounded text-sm" placeholder="Mensagem...">
-                        <button onclick="sendChat('${id}', 'Dentista')" class="bg-indigo-600 text-white p-2 rounded"><i class='bx bxs-send'></i></button>
-                        <button onclick="askAI('${id}')" class="bg-purple-600 text-white p-2 rounded" title="IA"><i class='bx bxs-magic-wand'></i></button>
-                    </div>
-                </div>
+                <div class="border p-2 rounded bg-white overflow-y-auto" id="j-fin"></div>
+                <div class="border p-2 rounded bg-white flex flex-col"><div id="chat" class="flex-grow overflow-y-auto p-2 mb-2"></div><div class="flex gap-2"><input id="c-msg" class="flex-grow border p-1 rounded"><button onclick="sendC('${id}')" class="bg-indigo-600 text-white px-3 rounded">></button><button onclick="askAI('${id}')" class="bg-purple-600 text-white px-3 rounded">🤖</button></div></div>
             </div>`;
+        App.utils.openModal("Prontuário", html, 'max-w-5xl');
         
-        App.utils.openModal("Prontuário", html, 'max-w-6xl');
+        const finDiv = document.getElementById('j-fin');
+        const recs = App.data.receivables.filter(r => r.patientId === id);
+        recs.forEach(r => finDiv.innerHTML += `<div class="border-b pb-1 mb-1 text-sm flex justify-between"><span>${r.description}</span><b>${App.utils.formatCurrency(r.amount)}</b></div>`);
 
-        // Carrega Financeiro
-        const finDiv = document.getElementById('journal-fin');
-        const financials = App.data.receivables.filter(r => r.patientId === id);
-        if(financials.length) {
-            financials.forEach(r => {
-                finDiv.innerHTML += `<div class="border-b pb-1 flex justify-between"><span>${r.description}</span> <b>${App.utils.formatCurrency(r.amount)}</b></div>`;
-            });
-        } else { finDiv.innerHTML = '<p class="text-gray-400 italic">Sem registros.</p>'; }
-
-        // Carrega Chat
-        currentChatRef = App.db.ref(`artifacts/${App.config.APP_ID}/patients/${id}/journal`);
+        currentChatRef = App.db.ref(App.paths.patientJournal(id));
         currentChatRef.limitToLast(50).on('child_added', s => {
             const m = s.val();
-            const div = document.createElement('div');
-            div.className = `p-2 rounded text-sm max-w-[90%] mb-1 ${m.author==='Dentista' ? 'ml-auto bg-indigo-100' : 'mr-auto bg-white border'}`;
-            div.innerHTML = `<b>${m.author}</b>: ${m.text}`;
-            const area = document.getElementById('chat-area');
-            if(area) { area.appendChild(div); area.scrollTop = area.scrollHeight; }
+            const d = document.createElement('div');
+            d.className = `p-2 rounded mb-1 text-sm max-w-[90%] ${m.author==='Dentista'?'ml-auto bg-indigo-100':'mr-auto bg-gray-100'}`;
+            d.innerHTML = `<b>${m.author}</b>: ${m.text}`;
+            document.getElementById('chat').appendChild(d);
         });
     };
 
-    window.sendChat = function(pid, author, txtOverride) {
-        const input = document.getElementById('chat-msg');
-        const txt = txtOverride || (input ? input.value : '');
-        if(!txt) return;
-        
-        App.db.ref(`artifacts/${App.config.APP_ID}/patients/${pid}/journal`).push({
-            text: txt, author: author, timestamp: new Date().toISOString()
-        });
-        if(input) input.value = '';
+    window.sendC = (id) => {
+        const txt = document.getElementById('c-msg').value;
+        if(txt) { App.db.ref(App.paths.patientJournal(id)).push({ text: txt, author: 'Dentista', timestamp: new Date().toISOString() }); document.getElementById('c-msg').value = ''; }
     };
 
-    // IA FLUTUANTE (SEM MISTURAR CHAT)
-    window.askAI = async function(pid) {
-        const p = App.data.patients.find(x => x.id === pid);
-        const btn = document.querySelector('button[title="IA"]');
-        if(btn) { btn.innerHTML = '...'; btn.disabled = true; }
-
+    window.askAI = async (id) => {
+        const p = App.data.patients.find(x => x.id === id);
+        const snaps = await App.db.ref(App.paths.patientJournal(id)).limitToLast(5).once('value');
+        let hist = ""; snaps.forEach(s => hist += `${s.val().author}: ${s.val().text}\n`);
+        const prompt = `Paciente: ${p.name}. Histórico: ${hist}. Sugira conduta.`;
         try {
-            const snaps = await App.db.ref(`artifacts/${App.config.APP_ID}/patients/${pid}/journal`).limitToLast(5).once('value');
-            let hist = "";
-            snaps.forEach(s => hist += `${s.val().author}: ${s.val().text}\n`);
-
-            const prompt = `ATUE COMO: Dentista Sênior. PACIENTE: ${p.name}. HISTÓRICO: ${hist}\nTAREFA: Analise e sugira conduta técnica.`;
-            const resp = await window.callGeminiAPI(prompt, "Análise.");
-
-            // Modal de Sugestão
-            const suggestionHTML = `
-                <textarea id="ai-text" class="w-full h-32 p-2 border rounded mb-2 text-sm">${resp}</textarea>
-                <div class="flex justify-end gap-2">
-                    <button onclick="document.getElementById('ai-modal').remove()" class="text-gray-500">Fechar</button>
-                    <button onclick="useSuggestion()" class="bg-purple-600 text-white px-3 py-1 rounded">Usar</button>
-                </div>`;
-            
-            const overlay = document.createElement('div');
-            overlay.id = 'ai-modal';
-            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]';
-            overlay.innerHTML = `<div class="bg-white p-4 rounded shadow-xl max-w-md w-full">${suggestionHTML}</div>`;
-            document.body.appendChild(overlay);
-
-            window.useSuggestion = () => {
-                const t = document.getElementById('ai-text').value;
-                const inp = document.getElementById('chat-msg');
-                if(inp) { inp.value = "🤖 " + t; inp.focus(); }
-                document.getElementById('ai-modal').remove();
-            };
-
+            const resp = await window.callGeminiAPI(prompt, "Analise.");
+            // MODAL DA IA
+            const html = `<textarea id="ai-res" class="w-full h-32 border p-2 text-sm">${resp}</textarea><div class="flex justify-end gap-2 mt-2"><button onclick="useAI()" class="bg-purple-600 text-white px-3 py-1 rounded">Usar</button></div>`;
+            const overlay = document.createElement('div'); overlay.id='ai-over'; overlay.className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]'; overlay.innerHTML=`<div class="bg-white p-4 rounded shadow-xl w-96">${html}</div>`; document.body.appendChild(overlay);
+            window.useAI = () => { document.getElementById('c-msg').value = "🤖 " + document.getElementById('ai-res').value; document.getElementById('ai-over').remove(); };
         } catch(e) { alert("Erro IA: " + e.message); }
-        finally { if(btn) { btn.innerHTML = '🤖'; btn.disabled = false; } }
+    };
+
+    window.delPat = (id) => { if(confirm("Excluir?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients/'+id)).remove(); };
+    
+    // Atalho para criar receita direto do paciente
+    window.openRecModal = function(pid) {
+        const html = `<form id="rec-form" class="grid gap-2 text-sm"><label>Serviço</label><input id="r-d" class="border p-2 rounded" required><label>Valor</label><input id="r-v" type="number" class="border p-2 rounded" required><button class="bg-indigo-600 text-white p-2 rounded mt-2">Salvar</button></form>`;
+        App.utils.openModal("Novo Serviço", html);
+        document.getElementById('rec-form').onsubmit = (e) => {
+            e.preventDefault();
+            const p = App.data.patients.find(x => x.id === pid);
+            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'finance/receivable')).push({
+                patientId: pid, patientName: p.name, description: document.getElementById('r-d').value, amount: parseFloat(document.getElementById('r-v').value), status: 'Aberto', dueDate: new Date().toISOString()
+            });
+            App.utils.closeModal();
+        };
     };
 
 })();
