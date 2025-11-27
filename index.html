@@ -16,7 +16,7 @@
 </head>
 <body class="bg-gray-100 h-screen overflow-hidden flex flex-col">
 
-    <div id="login-screen" class="fixed inset-0 bg-gradient-to-br from-indigo-900 to-blue-800 z-50 flex items-center justify-center p-4">
+    <div id="login-screen" class="fixed inset-0 bg-gradient-to-br from-indigo-900 to-blue-800 z-[100] flex items-center justify-center p-4">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm">
             <div class="text-center mb-6">
                 <i class='bx bxs-tooth text-6xl text-indigo-600'></i>
@@ -32,18 +32,28 @@
         </div>
     </div>
 
-    <div id="app-container" class="hidden flex h-screen">
-        <aside class="w-64 bg-indigo-900 text-white flex flex-col shadow-2xl z-10 hidden md:flex">
+    <header class="md:hidden bg-indigo-900 text-white p-4 flex justify-between items-center shadow-md z-40 shrink-0">
+        <div class="font-bold text-lg flex items-center gap-2"><i class='bx bxs-tooth'></i> DentIA</div>
+        <button id="mobile-menu-btn" class="text-white text-3xl focus:outline-none active:scale-90 transition">
+            <i class='bx bx-menu'></i>
+        </button>
+    </header>
+
+    <div id="app-container" class="hidden flex h-screen relative">
+        
+        <div id="mobile-overlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
+
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-indigo-900 text-white flex flex-col shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out md:relative md:translate-x-0">
             <div class="p-6 text-2xl font-bold flex items-center gap-2 border-b border-indigo-800">
                 <i class='bx bxs-tooth'></i> DentIA
             </div>
-            <nav id="nav-menu" class="flex-grow p-4 space-y-2"></nav>
-            <button id="logout-button" class="p-4 flex items-center text-red-300 hover:bg-red-900 hover:text-white transition">
+            <nav id="nav-menu" class="flex-grow p-4 space-y-2 overflow-y-auto"></nav>
+            <button id="logout-button" class="p-4 flex items-center text-red-300 hover:bg-red-900 hover:text-white transition mt-auto border-t border-indigo-800">
                 <i class='bx bx-log-out text-xl mr-2'></i> Sair
             </button>
         </aside>
         
-        <main id="main-content" class="flex-grow p-0 bg-gray-100 overflow-hidden relative flex flex-col"></main>
+        <main id="main-content" class="flex-grow p-0 bg-gray-100 overflow-hidden relative flex flex-col w-full"></main>
     </div>
 
     <div id="app-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
