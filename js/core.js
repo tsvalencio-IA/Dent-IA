@@ -8,21 +8,12 @@
         data: { patients: [], receivables: [], stock: [], expenses: [] },
         utils: {
             formatCurrency: v => 'R$ ' + parseFloat(v||0).toFixed(2).replace('.', ','),
-            formatDate: d => {
-                if(!d) return '-';
-                // Correção de fuso horário simples para datas YYYY-MM-DD
-                const date = new Date(d);
-                const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-                return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
-            },
+            formatDate: d => d ? new Date(d).toLocaleDateString('pt-BR') : '-',
             getAdminPath: (uid, path) => `artifacts/${window.AppConfig.APP_ID}/users/${uid}/${path}`,
-            
-            // MODAL RESPONSIVO GLOBAL
             openModal: (title, html, maxW) => {
                 const m = document.getElementById('app-modal');
-                const content = m.querySelector('.modal-content');
-                // Ajuste Mobile: w-11/12 (quase tela toda no cel) e largura fixa no desktop
-                content.className = `modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-11/12 ${maxW || 'md:max-w-2xl'}`;
+                if(!m) return;
+                m.querySelector('.modal-content').className = 'modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ' + (maxW || 'max-w-md');
                 document.getElementById('modal-title').textContent = title;
                 document.getElementById('modal-body').innerHTML = html;
                 m.classList.remove('hidden'); m.classList.add('flex');
@@ -88,15 +79,8 @@
         App.currentView = view;
         document.getElementById('main-content').innerHTML = '';
         refreshView();
-        
-        // Fecha sidebar no mobile ao clicar (UX)
-        if(window.innerWidth < 1024) {
-            // Lógica futura para fechar menu hamburguer se existir
-        }
-
         document.querySelectorAll('#nav-menu button').forEach(btn => {
-            const active = btn.dataset.view === view;
-            btn.className = active ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
+            btn.className = btn.dataset.view === view ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
         });
     }
 
@@ -105,9 +89,9 @@
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
         
         document.getElementById('main-content').innerHTML = `
-            <div class="p-4 md:p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100">
-                <h2 class="text-2xl md:text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="p-8 bg-white shadow-2xl rounded-2xl border border-indigo-100">
+                <h2 class="text-3xl font-bold text-indigo-800 mb-6">Dashboard Geral</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PACIENTES</p><h3 class="text-2xl font-bold text-indigo-800">${App.data.patients.length}</h3></div>
                     <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-sm text-gray-600">ESTOQUE</p><h3 class="text-2xl font-bold text-green-800">${App.data.stock.length}</h3></div>
                     <div class="p-4 bg-yellow-100 rounded-lg"><p class="font-bold text-sm text-gray-600">CAIXA (REAL)</p><h3 class="text-2xl font-bold text-yellow-800">${App.utils.formatCurrency(totalRec)}</h3></div>
@@ -115,9 +99,14 @@
                 </div>
                 <div class="border p-4 rounded-xl bg-gray-50">
                     <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica (IA)</h3>
-                    <textarea id="brain-input" class="w-full p-2 border rounded text-sm bg-gray-50" rows="3" placeholder="Ex: Atuar como especialista em implantes..."></textarea>
-                    <button id="save-brain" class="mt-2 w-full md:w-auto bg-indigo-600 text-white px-4 py-2 rounded shadow">Salvar Diretrizes</button>
+                    <textarea id="brain-input" class="w-full p-2 border rounded text-sm" rows="3"></textarea>
+                    <button id="save-brain" class="mt-2 bg-indigo-600 text-white px-4 py-1 rounded shadow">Salvar Diretrizes</button>
                 </div>
+                
+                <div class="mt-6 border-t pt-4 text-right">
+                     <button onclick="window.hardResetSystem()" class="text-xs text-red-400 hover:text-red-600 underline">Resetar Dados (Cuidado!)</button>
+                </div>
+                
                 <footer class="text-center py-4 text-xs text-gray-400 mt-8">Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong></footer>
             </div>`;
         
@@ -162,6 +151,19 @@
             document.getElementById('auth-submit-btn').textContent = isLoginMode ? 'Entrar' : 'Cadastrar';
         });
     }
+
+    // Função de Reset Global
+    window.hardResetSystem = () => {
+        const pwd = prompt("ATENÇÃO: Isso apagará TODOS os pacientes, finanças e estoque.\nDigite 'CONFIRMAR' para prosseguir:");
+        if(pwd === 'CONFIRMAR') {
+            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, '')).remove()
+                .then(() => {
+                    alert("Sistema resetado com sucesso.");
+                    window.location.reload();
+                })
+                .catch(e => alert("Erro ao resetar: " + e.message));
+        }
+    };
 
     document.addEventListener('DOMContentLoaded', init);
 })();
