@@ -1,5 +1,5 @@
 // ==================================================================
-// MÓDULO PACIENTES: Prontuário, Chat e IA (Versão Mobile Corrigida)
+// MÓDULO PACIENTES: Prontuário (Layout Mobile/Desktop Corrigido)
 // ==================================================================
 (function() {
     const App = window.DentistaApp;
@@ -75,16 +75,11 @@
                 <button class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-md transition transform active:scale-95">${isEdit?'Salvar Alterações':'Cadastrar'}</button>
             </form>`;
         App.utils.openModal(isEdit?"Editar Paciente":"Novo Paciente", html);
-        
         if(isEdit && p.treatmentType) setTimeout(() => document.getElementById('p-t').value = p.treatmentType, 50);
 
         document.getElementById('pat-form').onsubmit = (e) => {
             e.preventDefault();
-            const data = {
-                name: document.getElementById('p-n').value, email: document.getElementById('p-e').value,
-                phone: document.getElementById('p-p').value, treatmentType: document.getElementById('p-t').value,
-                treatmentGoal: document.getElementById('p-g').value
-            };
+            const data = { name: document.getElementById('p-n').value, email: document.getElementById('p-e').value, phone: document.getElementById('p-p').value, treatmentType: document.getElementById('p-t').value, treatmentGoal: document.getElementById('p-g').value };
             const id = document.getElementById('p-id').value;
             if(id) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `patients/${id}`)).update(data);
             else { data.createdAt = new Date().toISOString(); App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'patients')).push(data); }
@@ -92,9 +87,9 @@
         };
     };
 
-    window.delPat = (id) => { if(confirm("Tem certeza? Isso apagará todo o histórico financeiro e clínico.")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `patients/${id}`)).remove(); };
+    window.delPat = (id) => { if(confirm("Tem certeza?")) App.db.ref(App.utils.getAdminPath(App.currentUser.uid, `patients/${id}`)).remove(); };
 
-    // --- PRONTUÁRIO DIGITAL ---
+    // --- PRONTUÁRIO DIGITAL (LAYOUT CORRIGIDO) ---
     window.openJournal = function(pid) {
         if(currentChatRef) currentChatRef.off();
         const p = App.data.patients.find(x => x.id === pid);
@@ -114,15 +109,12 @@
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row gap-4 h-[60vh] md:h-[500px]">
+            <div class="flex flex-col md:flex-row gap-4 h-[70vh] md:h-[500px] overflow-hidden">
                 
-                <div class="flex-grow flex flex-col border rounded-xl bg-white shadow-sm overflow-hidden relative">
+                <div class="flex-grow flex flex-col border rounded-xl bg-white shadow-sm overflow-hidden relative h-2/3 md:h-full">
                     <div class="bg-gray-50 p-2 border-b text-center font-bold text-gray-600 text-xs uppercase tracking-widest">Evolução Clínica</div>
+                    <div id="chat-box" class="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50"></div>
                     
-                    <div id="chat-box" class="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50">
-                        <div class="flex justify-center"><div class="loader-spinner border-t-indigo-500 w-6 h-6"></div></div>
-                    </div>
-
                     <div id="file-prev" class="hidden px-4 py-2 bg-indigo-50 border-t border-indigo-100 flex justify-between items-center">
                         <span class="text-xs text-indigo-700 font-medium flex items-center"><i class='bx bx-paperclip mr-1'></i> Arquivo pronto</span>
                         <button onclick="clearFile()" class="text-red-500"><i class='bx bx-x'></i></button>
@@ -133,22 +125,15 @@
                             <button onclick="document.getElementById('c-file').click()" class="text-gray-400 hover:text-indigo-600 p-2 rounded-full hover:bg-gray-100 transition"><i class='bx bx-camera text-xl'></i></button>
                             <input id="c-file" type="file" class="hidden" accept="image/*" onchange="window.selFile(this)">
                         </div>
-                        
                         <input id="c-msg" class="w-full md:flex-grow order-last md:order-none bg-gray-100 border-0 rounded-full px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="Evolução...">
-                        
                         <div class="flex gap-2 shrink-0">
-                             <button onclick="sendMsg('${pid}')" class="bg-indigo-600 text-white rounded-full p-2.5 shadow-md hover:bg-indigo-700 transition flex items-center justify-center">
-                                <i class='bx bxs-send'></i>
-                            </button>
-                            
-                            <button onclick="callAI('${pid}')" class="bg-purple-600 text-white rounded-full p-2.5 shadow-md hover:bg-purple-700 transition flex items-center justify-center" title="Gerar Parecer IA">
-                                <i class='bx bxs-magic-wand'></i>
-                            </button>
+                             <button onclick="sendMsg('${pid}')" class="bg-indigo-600 text-white rounded-full p-2.5 shadow-md hover:bg-indigo-700 transition flex items-center justify-center"><i class='bx bxs-send'></i></button>
+                            <button onclick="callAI('${pid}')" class="bg-purple-600 text-white rounded-full p-2.5 shadow-md hover:bg-purple-700 transition flex items-center justify-center" title="Gerar Parecer IA"><i class='bx bxs-magic-wand'></i></button>
                         </div>
                     </div>
                 </div>
 
-                <div class="hidden md:flex flex-col w-1/3 border rounded-xl bg-white shadow-sm overflow-hidden">
+                <div class="flex flex-col w-full md:w-1/3 border rounded-xl bg-white shadow-sm overflow-hidden h-1/3 md:h-full min-w-[300px]">
                     <div class="bg-gray-50 p-2 border-b text-center font-bold text-gray-600 text-xs uppercase tracking-widest">Financeiro Recente</div>
                     <div id="p-fin-hist" class="flex-grow overflow-y-auto p-2 space-y-2">Carregando...</div>
                 </div>
@@ -208,18 +193,11 @@
                     </div>`;
                 });
                 box.scrollTop = box.scrollHeight;
-            } else {
-                box.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-gray-400 text-sm opacity-50"><i class="bx bx-message-dots text-4xl mb-2"></i><p>Inicie a evolução...</p></div>';
             }
         });
     };
 
-    window.selFile = (input) => {
-        if(input.files[0]) {
-            selectedFile = input.files[0];
-            document.getElementById('file-prev').classList.remove('hidden');
-        }
-    };
+    window.selFile = (input) => { if(input.files[0]) { selectedFile = input.files[0]; document.getElementById('file-prev').classList.remove('hidden'); } };
     window.clearFile = () => { selectedFile = null; document.getElementById('c-file').value = ''; document.getElementById('file-prev').classList.add('hidden'); };
 
     window.sendMsg = async (pid) => {
@@ -227,8 +205,7 @@
         if(!txt && !selectedFile) return;
         
         const btn = document.querySelector('button[onclick*="sendMsg"]');
-        const oldIcon = btn.innerHTML;
-        btn.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i>'; btn.disabled = true;
+        const oldIcon = btn.innerHTML; btn.innerHTML = '...'; btn.disabled = true;
 
         let media = null;
         if(selectedFile) {
@@ -246,7 +223,7 @@
         setTimeout(() => document.getElementById('c-msg').focus(), 100);
     };
 
-    // --- NOVA IA INTEGRADA (LÊ O CÉREBRO E ATIVA MODO 2) ---
+    // --- NOVA IA (MODO 2) ---
     window.callAI = async (pid) => {
         const p = App.data.patients.find(x => x.id === pid);
         const btn = document.querySelector('button[title="Gerar Parecer IA"]');
@@ -256,40 +233,17 @@
         btn.disabled = true;
 
         try {
-            // 1. Busca Histórico
             const snaps = await App.db.ref(`artifacts/${window.AppConfig.APP_ID}/patients/${pid}/journal`).limitToLast(10).once('value');
             let hist = "";
             if(snaps.exists()) snaps.forEach(s => hist += `[${s.val().author}]: ${s.val().text}\n`);
 
-            // 2. Busca o Cérebro (Diretrizes do Dentista)
             const brainSnap = await App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives')).once('value');
             const customBrain = brainSnap.exists() ? brainSnap.val().promptDirectives : null;
 
-            // 3. Monta o Prompt com Instrução de MODO 2
-            let systemPrompt = "";
-            if (customBrain) {
-                systemPrompt = `
-                    ${customBrain}
-                    
-                    --- INSTRUÇÃO DO SISTEMA ---
-                    ATENÇÃO: O interlocutor agora é o DENTISTA (Profissional).
-                    ATIVE O "MODO 2: ASSISTENTE TÉCNICA".
-                    Seja técnica, direta e profissional. Use termos odontológicos.
-                `;
-            } else {
-                systemPrompt = "ATUE COMO: Dentista Especialista Sênior. Gere um parecer técnico direto.";
-            }
+            let systemPrompt = customBrain ? `${customBrain}\n--- INSTRUÇÃO ---\nATIVE O MODO 2: ASSISTENTE TÉCNICA.\nSeja técnica e use termos odontológicos.` : "ATUE COMO: Dentista Especialista. Gere parecer técnico.";
 
-            const response = await window.callGeminiAPI(
-                `${systemPrompt}
-                 
-                 PACIENTE: ${p.name}, ${p.treatmentType}.
-                 HISTÓRICO RECENTE:
-                 ${hist}`, 
-                "Gere a evolução técnica sugerida."
-            );
+            const response = await window.callGeminiAPI(`${systemPrompt}\nPACIENTE: ${p.name}, ${p.treatmentType}.\nHISTÓRICO:\n${hist}`, "Gere a evolução técnica.");
 
-            // 4. Modal de Resposta
             const overlay = document.createElement('div');
             overlay.className = "fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in";
             overlay.id = "ai-overlay";
@@ -301,17 +255,12 @@
                         <button onclick="document.getElementById('ai-overlay').remove()" class="hover:bg-purple-700 p-1 rounded"><i class='bx bx-x text-2xl'></i></button>
                     </div>
                     <div class="p-4 overflow-y-auto bg-gray-50">
-                        <p class="text-xs text-gray-500 mb-2">Este texto será salvo como nota interna (o paciente não verá):</p>
-                        <textarea id="ai-result-text" class="w-full h-48 p-3 border rounded-lg text-sm text-gray-700 leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none shadow-inner">${response}</textarea>
+                        <textarea id="ai-result-text" class="w-full h-48 p-3 border rounded-lg text-sm text-gray-700 outline-none shadow-inner">${response}</textarea>
                     </div>
                     <div class="p-4 border-t bg-white flex justify-end gap-3">
-                        <button onclick="document.getElementById('ai-overlay').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancelar</button>
-                        <button onclick="confirmAI('${pid}')" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-lg text-sm font-bold flex items-center">
-                            <i class='bx bx-save mr-2'></i> Salvar (Interno)
-                        </button>
+                        <button onclick="confirmAI('${pid}')" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-lg text-sm font-bold">Salvar (Interno)</button>
                     </div>
-                </div>
-            `;
+                </div>`;
             document.body.appendChild(overlay);
 
             window.confirmAI = (id) => {
@@ -325,5 +274,4 @@
         } catch(e) { alert("Erro na IA: " + e.message); } 
         finally { btn.innerHTML = oldHtml; btn.disabled = false; }
     };
-
 })();
