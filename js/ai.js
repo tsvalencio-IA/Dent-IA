@@ -1,56 +1,43 @@
 // =====================================================================
-// 🧠 MÓDULO IA: js/ai.js (VERSÃO FINAL COMPATÍVEL)
+// 🧠 MÓDULO IA: js/ai.js
 // =====================================================================
 (function() {
-    // Recupera configurações com segurança
-    var config = window.AppConfig || {};
-    var GEMINI_MODEL = config.GEMINI_MODEL || "gemini-1.5-flash"; 
-    var API_KEY = config.API_KEY;
+    const config = window.AppConfig || {};
+    const GEMINI_MODEL = config.GEMINI_MODEL || "gemini-1.5-flash"; 
+    const API_KEY = config.API_KEY;
 
     async function callGeminiAPI(systemPrompt, userMessage) {
-        // 1. Validação
-        if (!API_KEY || API_KEY.includes("SUA_CHAVE") || API_KEY.length < 10) {
+        if (!API_KEY || API_KEY.length < 10) {
             console.error("ERRO GEMINI: API Key inválida.");
-            return "Erro de Configuração: Chave API não encontrada. Verifique o arquivo config.js.";
+            return "Erro: Chave API não configurada.";
         }
 
-        // Endpoint V1beta
-        var url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
         
-        // 2. TRUQUE SÊNIOR: Unificar System Prompt + User Message
-        // Isso resolve o erro "Invalid value at system_instruction" (Erro 400)
-        var finalPrompt = `
+        // Unifica prompts para garantir compatibilidade
+        const finalPrompt = `
 CONTEXTO DO SISTEMA:
 ${systemPrompt}
-
 ---
 MENSAGEM DO USUÁRIO:
 ${userMessage}
         `.trim();
 
-        var payload = {
+        const payload = {
             contents: [{ role: "user", parts: [{ text: finalPrompt }] }]
         };
 
         try {
-            var response = await fetch(url, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                var err = await response.json();
-                throw new Error(err.error ? err.error.message : "Erro desconhecido na API");
-            }
+            if (!response.ok) throw new Error((await response.json()).error.message);
 
-            var data = await response.json();
-            
-            if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-                return data.candidates[0].content.parts[0].text;
-            } else {
-                return "A IA não conseguiu gerar uma resposta válida.";
-            }
+            const data = await response.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || "A IA não respondeu.";
 
         } catch (error) {
             console.error("Erro IA:", error);
@@ -58,6 +45,5 @@ ${userMessage}
         }
     }
 
-    // Exporta globalmente
     window.callGeminiAPI = callGeminiAPI;
 })();
