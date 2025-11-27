@@ -2,7 +2,7 @@
 // 🔑 ARQUIVO DE CONFIGURAÇÃO: js/config.js
 // =====================================================================
 (function() {
-    // 1. CONFIGURAÇÃO FIREBASE (Banco de Dados e Auth)
+    // 1. CONFIGURAÇÃO FIREBASE
     const firebaseConfig = {
         apiKey: "AIzaSyBs1EWOvZXw52Ih-m_mhsCofRcjmxY8xQw",
         authDomain: "dental-80cad.firebaseapp.com",
@@ -13,13 +13,15 @@
         appId: "1:883904798384:web:df25e88c245d4edc1ba575"
     };
 
-    // 2. CONFIGURAÇÃO CLOUDINARY (Imagens)
+    // 2. CONFIGURAÇÃO CLOUDINARY
     const CLOUDINARY_CLOUD_NAME = "djtiaygrs";
     const CLOUDINARY_UPLOAD_PRESET = "dental";
 
-    // 3. CONFIGURAÇÃO GOOGLE GEMINI API (IA)
-    // Usamos o 1.5-flash por ser rápido. Se falhar, o ai.js tentará o gemini-pro.
-    const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
+    // 3. CONFIGURAÇÃO GOOGLE GEMINI API
+    // ATENÇÃO: Use este modelo exato. O "2.5" não existe, o que força o sistema a usar uma versão antiga e instável.
+    const GEMINI_MODEL = "gemini-1.5-flash"; 
+    
+    // SUA CHAVE NOVA (A que você criou e disse que funcionou):
     const API_KEY = "AIzaSyAFAfXgdbMeXdGf42zWeYbNbBsi0LrvpvU"; 
 
     // 4. ITENS DE NAVEGAÇÃO
