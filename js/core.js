@@ -1,21 +1,29 @@
+// ==================================================================
+// MÓDULO CENTRAL (CORE) - Login, Navegação e Dados Globais
+// ==================================================================
 (function() {
-    // ESTADO GLOBAL COMPARTILHADO
+    // ESTADO GLOBAL COMPARTILHADO (Acessível por todos os módulos via window.DentistaApp)
     window.DentistaApp = {
         db: null, auth: null, currentUser: null, currentView: 'dashboard',
+        // Caches de Dados
         data: { patients: [], receivables: [], stock: [], expenses: [] },
+        // Utilitários Globais
         utils: {
             formatCurrency: v => 'R$ ' + parseFloat(v||0).toFixed(2).replace('.', ','),
             formatDate: d => d ? new Date(d).toLocaleDateString('pt-BR') : '-',
             getAdminPath: (uid, path) => `artifacts/${window.AppConfig.APP_ID}/users/${uid}/${path}`,
-            // Modal Global
             openModal: (title, html, maxW) => {
                 const m = document.getElementById('app-modal');
+                if(!m) return;
                 m.querySelector('.modal-content').className = 'modal-content bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] w-full ' + (maxW || 'max-w-md');
                 document.getElementById('modal-title').textContent = title;
                 document.getElementById('modal-body').innerHTML = html;
                 m.classList.remove('hidden'); m.classList.add('flex');
             },
-            closeModal: () => { document.getElementById('app-modal').classList.add('hidden'); document.getElementById('app-modal').classList.remove('flex'); }
+            closeModal: () => { 
+                const m = document.getElementById('app-modal');
+                if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+            }
         }
     };
 
@@ -33,37 +41,61 @@
     function setupAuth() {
         App.auth.onAuthStateChanged(user => {
             if (user) {
+                // Verifica se é Dentista
                 const ref = App.db.ref(App.utils.getAdminPath(user.uid, 'profile'));
                 ref.once('value').then(s => {
                     const p = s.val();
-                    // Verifica permissão
                     if ((p && p.role === 'dentist') || user.email === 'admin@ts.com') {
                         App.currentUser = { uid: user.uid, email: user.email };
+                        // Auto-fix Admin se não existir perfil
                         if (!p && user.email === 'admin@ts.com') ref.set({ email: user.email, role: 'dentist', registeredAt: new Date().toISOString() });
-                        loadData(); 
+                        
+                        loadData(); // Inicia carregamento dos dados
                         showUI();
-                    } else { alert("Acesso restrito."); App.auth.signOut(); }
+                    } else {
+                        alert("Acesso restrito. Este painel é apenas para Dentistas.");
+                        App.auth.signOut();
+                    }
                 });
-            } else { App.currentUser = null; showLogin(); }
+            } else {
+                App.currentUser = null;
+                showLogin();
+            }
         });
     }
 
     function loadData() {
         const uid = App.currentUser.uid;
-        // Carrega todos os dados em tempo real
-        const endpoints = { 'patients': 'patients', 'stock': 'stock', 'finance/receivable': 'receivables', 'finance/expenses': 'expenses' };
-        
-        Object.keys(endpoints).forEach(path => {
-            App.db.ref(App.utils.getAdminPath(uid, path)).on('value', s => {
-                App.data[endpoints[path]] = [];
-                if(s.exists()) s.forEach(c => { let i = c.val(); i.id = c.key; App.data[endpoints[path]].push(i); });
-                
-                // Atualiza a tela ativa automaticamente
-                if(App.currentView === 'dashboard') renderDashboard();
-                else if(App.currentView === 'patients' && window.renderPatientManager) window.renderPatientManager();
-                else if(App.currentView === 'financials' && window.renderFinancialManager) window.renderFinancialManager();
-            });
+        // Carrega Pacientes
+        App.db.ref(App.utils.getAdminPath(uid, 'patients')).on('value', s => {
+            App.data.patients = [];
+            if(s.exists()) s.forEach(c => { let p = c.val(); p.id = c.key; App.data.patients.push(p); });
+            refreshView();
         });
+        // Carrega Estoque
+        App.db.ref(App.utils.getAdminPath(uid, 'stock')).on('value', s => {
+            App.data.stock = [];
+            if(s.exists()) s.forEach(c => { let i = c.val(); i.id = c.key; App.data.stock.push(i); });
+            refreshView();
+        });
+        // Carrega Receitas
+        App.db.ref(App.utils.getAdminPath(uid, 'finance/receivable')).on('value', s => {
+            App.data.receivables = [];
+            if(s.exists()) s.forEach(c => { let r = c.val(); r.id = c.key; App.data.receivables.push(r); });
+            refreshView();
+        });
+        // Carrega Despesas
+        App.db.ref(App.utils.getAdminPath(uid, 'finance/expenses')).on('value', s => {
+            App.data.expenses = [];
+            if(s.exists()) s.forEach(c => { let e = c.val(); e.id = c.key; App.data.expenses.push(e); });
+            refreshView();
+        });
+    }
+
+    function refreshView() {
+        if (App.currentView === 'dashboard') renderDashboard();
+        else if (App.currentView === 'patients' && window.renderPatientManager) window.renderPatientManager();
+        else if (App.currentView === 'financials' && window.renderFinancialManager) window.renderFinancialManager();
     }
 
     function showLogin() { document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('app-container').classList.add('hidden'); }
@@ -71,14 +103,12 @@
 
     function navigateTo(view) {
         App.currentView = view;
-        const main = document.getElementById('main-content');
-        main.innerHTML = '';
-        if (view === 'dashboard') renderDashboard();
-        else if (view === 'patients' && window.renderPatientManager) window.renderPatientManager();
-        else if (view === 'financials' && window.renderFinancialManager) window.renderFinancialManager();
+        document.getElementById('main-content').innerHTML = '';
+        refreshView();
         
         document.querySelectorAll('#nav-menu button').forEach(btn => {
-            btn.className = btn.dataset.view === view ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
+            const active = btn.dataset.view === view;
+            btn.className = active ? 'flex items-center p-3 rounded-xl w-full text-left bg-indigo-600 text-white shadow-lg' : 'flex items-center p-3 rounded-xl w-full text-left text-indigo-200 hover:bg-indigo-700 hover:text-white';
         });
     }
 
@@ -92,13 +122,13 @@
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PACIENTES</p><h3 class="text-2xl font-bold text-indigo-800">${App.data.patients.length}</h3></div>
                     <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-sm text-gray-600">ESTOQUE</p><h3 class="text-2xl font-bold text-green-800">${App.data.stock.length}</h3></div>
-                    <div class="p-4 bg-yellow-100 rounded-lg"><p class="font-bold text-sm text-gray-600">CAIXA</p><h3 class="text-2xl font-bold text-yellow-800">${App.utils.formatCurrency(totalRec)}</h3></div>
-                    <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-sm text-gray-600">DESPESAS</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
+                    <div class="p-4 bg-yellow-100 rounded-lg"><p class="font-bold text-sm text-gray-600">CAIXA (REAL)</p><h3 class="text-2xl font-bold text-yellow-800">${App.utils.formatCurrency(totalRec)}</h3></div>
+                    <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-sm text-gray-600">PAGO (DESPESAS)</p><h3 class="text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
                 </div>
                 <div class="border p-4 rounded-xl bg-gray-50">
-                    <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica</h3>
-                    <textarea id="brain-input" class="w-full p-2 border rounded text-sm" rows="3"></textarea>
-                    <button id="save-brain" class="mt-2 bg-indigo-600 text-white px-4 py-1 rounded">Salvar Diretrizes</button>
+                    <h3 class="font-bold text-indigo-800 mb-2">Cérebro da Clínica (Diretrizes IA)</h3>
+                    <textarea id="brain-input" class="w-full p-2 border rounded text-sm bg-gray-50" rows="3" placeholder="Ex: Atuar como especialista em implantes..."></textarea>
+                    <button id="save-brain" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded shadow">Salvar Diretrizes</button>
                 </div>
                 <footer class="text-center py-4 text-xs text-gray-400 mt-8">Desenvolvido com 🤖, por <strong>thIAguinho Soluções</strong></footer>
             </div>`;
@@ -128,15 +158,15 @@
         const newForm = form.cloneNode(true); form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
             try {
-                const em = document.getElementById('auth-email').value;
-                const pw = document.getElementById('auth-password').value;
-                if (isLoginMode) await App.auth.signInWithEmailAndPassword(em, pw);
+                if (isLoginMode) await App.auth.signInWithEmailAndPassword(email, pass);
                 else {
-                    const c = await App.auth.createUserWithEmailAndPassword(em, pw);
-                    await App.db.ref(App.utils.getAdminPath(c.user.uid, 'profile')).set({ email: em, role: 'dentist', registeredAt: new Date().toISOString() });
+                    const c = await App.auth.createUserWithEmailAndPassword(email, pass);
+                    await App.db.ref(App.utils.getAdminPath(c.user.uid, 'profile')).set({ email, role: 'dentist', registeredAt: new Date().toISOString() });
                 }
-            } catch(e) { alert("Erro: " + e.message); }
+            } catch(e) { alert("Erro Login: " + e.message); }
         });
 
         document.getElementById('toggle-auth-mode').addEventListener('click', () => {
