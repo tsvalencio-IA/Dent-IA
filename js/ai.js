@@ -1,75 +1,63 @@
 // =====================================================================
-// 🧠 MÓDULO IA: js/ai.js (VERSÃO BLINDADA FINAL)
+// 🧠 MÓDULO IA: js/ai.js (VERSÃO FINAL COMPATÍVEL)
 // =====================================================================
 (function() {
-    
-    // Proteção contra carregamento duplicado ou falha de config
+    // Recupera configurações com segurança
     var config = window.AppConfig || {};
-    var GEMINI_MODEL = config.GEMINI_MODEL || "gemini-2.5-flash-preview-09-2025";
+    var GEMINI_MODEL = config.GEMINI_MODEL || "gemini-1.5-flash"; 
     var API_KEY = config.API_KEY;
 
-    /**
-     * Função ÚNICA para chamar o Google Gemini.
-     * Trata erros internamente para não travar o botão da UI.
-     */
     async function callGeminiAPI(systemPrompt, userMessage) {
-        
-        // 1. Validação básica
+        // 1. Validação
         if (!API_KEY || API_KEY.includes("SUA_CHAVE") || API_KEY.length < 10) {
-            console.error("ERRO IA: Chave API inválida.");
-            return "Erro de Configuração: A chave da IA não foi configurada corretamente no sistema.";
+            console.error("ERRO GEMINI: API Key inválida.");
+            return "Erro de Configuração: Chave API não encontrada. Verifique o arquivo config.js.";
         }
 
-        // 2. Endpoint Seguro (v1beta)
+        // Endpoint V1beta
         var url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
         
-        // 3. Montagem do Payload (Estratégia de Prompt Único para evitar Erro 400)
-        var fullText = `
-[INSTRUÇÕES DO SISTEMA]
+        // 2. TRUQUE SÊNIOR: Unificar System Prompt + User Message
+        // Isso resolve o erro "Invalid value at system_instruction" (Erro 400)
+        var finalPrompt = `
+CONTEXTO DO SISTEMA:
 ${systemPrompt}
 
-[DADOS DO CONTEXTO ATUAL]
+---
+MENSAGEM DO USUÁRIO:
 ${userMessage}
         `.trim();
 
         var payload = {
-            contents: [{
-                role: "user",
-                parts: [{ text: fullText }]
-            }]
+            contents: [{ role: "user", parts: [{ text: finalPrompt }] }]
         };
 
         try {
-            // 4. Requisição
             var response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            // 5. Tratamento de Erro HTTP
             if (!response.ok) {
-                var errBody = await response.json();
-                var errMsg = errBody.error ? errBody.error.message : "Erro desconhecido";
-                console.error("Erro API Gemini:", errMsg);
-                return `A IA encontrou um problema técnico: ${errMsg}`;
+                var err = await response.json();
+                throw new Error(err.error ? err.error.message : "Erro desconhecido na API");
             }
 
-            // 6. Sucesso
             var data = await response.json();
+            
             if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
                 return data.candidates[0].content.parts[0].text;
             } else {
-                return "A IA não conseguiu formular uma resposta. Tente novamente.";
+                return "A IA não conseguiu gerar uma resposta válida.";
             }
 
-        } catch (e) {
-            console.error("Erro de Rede IA:", e);
-            return "Erro de conexão com a Inteligência Artificial. Verifique sua internet.";
+        } catch (error) {
+            console.error("Erro IA:", error);
+            return `Erro técnico na IA: ${error.message}`;
         }
     }
 
-    // Exporta para uso global
+    // Exporta globalmente
     window.callGeminiAPI = callGeminiAPI;
-
 })();
