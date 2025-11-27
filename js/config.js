@@ -2,6 +2,7 @@
 // 🔑 ARQUIVO DE CONFIGURAÇÃO: js/config.js
 // =====================================================================
 (function() {
+    // 1. CONFIGURAÇÃO FIREBASE (Banco de Dados e Auth)
     const firebaseConfig = {
         apiKey: "AIzaSyBs1EWOvZXw52Ih-m_mhsCofRcjmxY8xQw",
         authDomain: "dental-80cad.firebaseapp.com",
@@ -12,6 +13,16 @@
         appId: "1:883904798384:web:df25e88c245d4edc1ba575"
     };
 
+    // 2. CONFIGURAÇÃO CLOUDINARY (Imagens)
+    const CLOUDINARY_CLOUD_NAME = "djtiaygrs";
+    const CLOUDINARY_UPLOAD_PRESET = "dental";
+
+    // 3. CONFIGURAÇÃO GOOGLE GEMINI API (IA)
+    // Usamos o 1.5-flash por ser rápido. Se falhar, o ai.js tentará o gemini-pro.
+    const GEMINI_MODEL = "gemini-1.5-flash"; 
+    const API_KEY = "AIzaSyDPtGLwgenIdC3G3Hkojl9JEy6TPpsaRhg"; 
+
+    // 4. ITENS DE NAVEGAÇÃO
     const NAV_ITEMS = [
         { id: 'dashboard', label: 'Dashboard & IA', icon: 'bxs-dashboard' },
         { id: 'patients', label: 'Gestão de Pacientes', icon: 'bxs-group' },
@@ -20,10 +31,10 @@
 
     window.AppConfig = {
         firebaseConfig,
-        CLOUDINARY_CLOUD_NAME: "djtiaygrs",
-        CLOUDINARY_UPLOAD_PRESET: "dental",
-        GEMINI_MODEL: "gemini-1.5-flash", // Modelo estável
-        API_KEY: "AIzaSyDPtGLwgenIdC3G3Hkojl9JEy6TPpsaRhg", 
+        CLOUDINARY_CLOUD_NAME,
+        CLOUDINARY_UPLOAD_PRESET,
+        GEMINI_MODEL,
+        API_KEY,
         APP_ID: 'dentista-inteligente-app',
         NAV_ITEMS
     };
