@@ -96,9 +96,15 @@
     function renderDashboard() {
         if (!App.currentUser || !App.currentUser.uid) return;
 
+        // CÁLCULO DE SALDO: (Receitas Pagas) - (Despesas Pagas)
         const totalRec = App.data.receivables.reduce((acc, r) => r.status === 'Recebido' ? acc + parseFloat(r.amount||0) : acc, 0);
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
+        const balance = totalRec - totalExp;
         
+        // Define a cor do saldo
+        const balanceColor = balance >= 0 ? 'text-green-800' : 'text-red-600';
+        const balanceBg = balance >= 0 ? 'bg-green-100' : 'bg-red-100';
+
         document.getElementById('main-content').innerHTML = `
             <div class="p-4 md:p-8 overflow-y-auto h-full">
                 <div class="bg-white shadow-xl rounded-2xl border border-indigo-100 animate-fade-in p-6">
@@ -106,8 +112,13 @@
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
                         <div class="p-4 bg-indigo-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-indigo-600">Pacientes</p><h3 class="text-xl md:text-3xl font-bold text-indigo-900">${App.data.patients.length}</h3></div>
                         <div class="p-4 bg-blue-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-blue-600">Estoque</p><h3 class="text-xl md:text-3xl font-bold text-blue-900">${App.data.stock.length}</h3></div>
-                        <div class="p-4 bg-green-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-green-600">Caixa Real</p><h3 class="text-lg md:text-2xl font-bold text-green-800">${App.utils.formatCurrency(totalRec)}</h3></div>
-                        <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-red-600">Pago</p><h3 class="text-lg md:text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
+                        
+                        <div class="p-4 ${balanceBg} rounded-lg">
+                            <p class="font-bold text-[10px] md:text-xs uppercase ${balanceColor.replace('800','700').replace('600','700')}">Saldo Líquido</p>
+                            <h3 class="text-lg md:text-2xl font-bold ${balanceColor}">${App.utils.formatCurrency(balance)}</h3>
+                        </div>
+
+                        <div class="p-4 bg-red-100 rounded-lg"><p class="font-bold text-[10px] md:text-xs uppercase text-red-600">Total Pago</p><h3 class="text-lg md:text-2xl font-bold text-red-800">${App.utils.formatCurrency(totalExp)}</h3></div>
                     </div>
                     
                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -144,13 +155,13 @@
     function showLoginInterface() { 
         document.getElementById('login-screen').classList.remove('hidden'); 
         document.getElementById('app-container').classList.add('hidden'); 
-        document.querySelector('header').classList.add('hidden'); // Esconde header mobile no login
+        document.querySelector('header').classList.add('hidden'); 
     }
     
     function showAppInterface() { 
         document.getElementById('login-screen').classList.add('hidden'); 
         document.getElementById('app-container').classList.remove('hidden'); 
-        document.querySelector('header').classList.remove('hidden'); // Mostra header mobile
+        document.querySelector('header').classList.remove('hidden'); 
         renderSidebar(); 
         navigateTo('dashboard'); 
     }
@@ -159,11 +170,11 @@
         App.currentView = view;
         refreshCurrentView();
         
-        // Fecha menu mobile ao navegar
+        // Fecha menu mobile
         const sb = document.getElementById('sidebar');
         const overlay = document.getElementById('mobile-overlay');
-        sb.classList.add('-translate-x-full'); // Esconde sidebar
-        overlay.classList.add('hidden'); // Esconde overlay
+        sb.classList.add('-translate-x-full'); 
+        overlay.classList.add('hidden'); 
 
         document.querySelectorAll('#nav-menu button').forEach(btn => {
             const active = btn.dataset.view === view;
@@ -187,7 +198,6 @@
         document.getElementById('close-modal').addEventListener('click', App.utils.closeModal);
         document.getElementById('logout-button').addEventListener('click', () => App.auth.signOut().then(() => window.location.reload()));
 
-        // --- LÓGICA DO MENU MOBILE ---
         const btnMobile = document.getElementById('mobile-menu-btn');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('mobile-overlay');
@@ -196,16 +206,15 @@
             btnMobile.addEventListener('click', () => {
                 const isClosed = sidebar.classList.contains('-translate-x-full');
                 if(isClosed) {
-                    sidebar.classList.remove('-translate-x-full'); // Abre
+                    sidebar.classList.remove('-translate-x-full'); 
                     overlay.classList.remove('hidden');
                 } else {
-                    sidebar.classList.add('-translate-x-full'); // Fecha
+                    sidebar.classList.add('-translate-x-full');
                     overlay.classList.add('hidden');
                 }
             });
         }
 
-        // Fechar ao clicar no overlay
         if(overlay) {
             overlay.addEventListener('click', () => {
                 sidebar.classList.add('-translate-x-full');
@@ -213,7 +222,6 @@
             });
         }
 
-        // Login Form
         const form = document.getElementById('auth-form');
         const newForm = form.cloneNode(true); form.parentNode.replaceChild(newForm, form);
         
