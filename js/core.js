@@ -64,6 +64,9 @@
 
     // 3. LISTENERS EM TEMPO REAL (FIREBASE)
     function startDataListeners() {
+        // SEGURANÇA: Se não tem user, não tenta buscar dados
+        if (!App.currentUser || !App.currentUser.uid) return;
+
         const uid = App.currentUser.uid;
         const maps = { 
             'patients': 'patients', 
@@ -97,6 +100,9 @@
     }
 
     function renderDashboard() {
+        // BLINDAGEM DE SEGURANÇA: Se não houver usuário logado, aborta renderização
+        if (!App.currentUser || !App.currentUser.uid) return;
+
         const totalRec = App.data.receivables.reduce((acc, r) => r.status === 'Recebido' ? acc + parseFloat(r.amount||0) : acc, 0);
         const totalExp = App.data.expenses.reduce((acc, e) => e.status === 'Pago' ? acc + parseFloat(e.amount||0) : acc, 0);
         
@@ -115,12 +121,26 @@
                     <textarea id="brain-input" class="w-full p-3 border rounded text-sm focus:ring-2 focus:ring-purple-500 outline-none" rows="2" placeholder="Ex: Priorize tratamentos estéticos nas sugestões..."></textarea>
                     <button id="save-brain" class="mt-2 bg-purple-600 text-white px-4 py-1 rounded text-sm hover:bg-purple-700 transition">Salvar Cérebro</button>
                 </div>
+
+                <div class="mt-6 border-t pt-4 text-right">
+                     <button onclick="window.hardResetSystem()" class="text-xs text-red-400 hover:text-red-600 underline">Resetar Dados (Cuidado!)</button>
+                </div>
             </div>`;
             
         // Carrega config da IA
         const brainRef = App.db.ref(App.utils.getAdminPath(App.currentUser.uid, 'aiConfig/directives'));
-        brainRef.once('value', s => { if(s.exists()) document.getElementById('brain-input').value = s.val().promptDirectives; });
-        document.getElementById('save-brain').onclick = () => { brainRef.update({ promptDirectives: document.getElementById('brain-input').value }); alert("IA Atualizada!"); };
+        brainRef.once('value', s => { 
+            const input = document.getElementById('brain-input');
+            if(s.exists() && input) input.value = s.val().promptDirectives; 
+        });
+        
+        const btnSave = document.getElementById('save-brain');
+        if(btnSave) {
+            btnSave.onclick = () => { 
+                brainRef.update({ promptDirectives: document.getElementById('brain-input').value }); 
+                alert("IA Atualizada!"); 
+            };
+        }
     }
 
     // 5. AUXILIARES DE UI
@@ -171,6 +191,19 @@
             document.getElementById('auth-submit-btn').textContent = isLoginMode ? 'Entrar' : 'Cadastrar';
         });
     }
+
+    // Função de Reset Global
+    window.hardResetSystem = () => {
+        const pwd = prompt("ATENÇÃO: Isso apagará TODOS os pacientes, finanças e estoque.\nDigite 'CONFIRMAR' para prosseguir:");
+        if(pwd === 'CONFIRMAR') {
+            App.db.ref(App.utils.getAdminPath(App.currentUser.uid, '')).remove()
+                .then(() => {
+                    alert("Sistema resetado com sucesso.");
+                    window.location.reload();
+                })
+                .catch(e => alert("Erro ao resetar: " + e.message));
+        }
+    };
 
     document.addEventListener('DOMContentLoaded', init);
 })();
